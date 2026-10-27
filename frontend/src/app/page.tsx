@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { AuthLoading, AuthScreen } from "@/components/auth-screen";
 import { ChatView } from "@/components/chat-view";
 import { Composer } from "@/components/composer";
 import { DatabaseIcon, MenuIcon } from "@/components/icons";
@@ -9,11 +10,13 @@ import { IngestDialog } from "@/components/ingest-dialog";
 import { Sidebar } from "@/components/sidebar";
 import { SourceSheet } from "@/components/source-card";
 import { askQuestion } from "@/lib/api";
+import { useAuth } from "@/lib/use-auth";
 import { makeTitle, useChatStore } from "@/lib/use-chat-store";
 import { useBackendStatus } from "@/lib/use-backend-status";
 import type { ChatMessage, Source } from "@/lib/types";
 
 export default function Home() {
+  const auth = useAuth();
   const store = useChatStore();
   const { status: backendStatus, recheck } = useBackendStatus();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -106,6 +109,14 @@ export default function Home() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [startNewInquiry]);
 
+  if (auth.status === "loading") {
+    return <AuthLoading />;
+  }
+
+  if (!auth.user) {
+    return <AuthScreen onLogin={auth.login} onSignup={auth.signup} />;
+  }
+
   const isPending = activeId ? pendingIds.has(activeId) : false;
   const lastRoute = [...(active?.messages ?? [])]
     .reverse()
@@ -118,6 +129,7 @@ export default function Home() {
         activeId={activeId}
         open={sidebarOpen}
         backendStatus={backendStatus}
+        user={auth.user}
         onClose={() => setSidebarOpen(false)}
         onSelect={(id) => {
           setActiveId(id);
@@ -130,6 +142,10 @@ export default function Home() {
         }}
         onIndex={() => setIngestOpen(true)}
         onRecheck={recheck}
+        onLogout={() => {
+          store.clearAll();
+          auth.logout();
+        }}
       />
 
       <main className="relative flex min-w-0 flex-1 flex-col bg-[#080b10] bg-[radial-gradient(120%_75%_at_50%_-20%,rgba(110,231,183,0.05),transparent_55%)]">

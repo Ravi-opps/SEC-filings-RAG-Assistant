@@ -1,6 +1,60 @@
-import type { IngestResponse, QueryResponse } from "./types";
+import type {
+  AuthResponse,
+  AuthUser,
+  IngestResponse,
+  QueryResponse,
+} from "./types";
 
 const BASE_PATH = "/api/backend";
+const TOKEN_KEY = "filing-room:token:v1";
+const USER_KEY = "filing-room:user:v1";
+
+export const AUTH_EVENT = "filing-room:auth";
+
+export function readToken(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function readStoredUser(): AuthUser | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(USER_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as AuthUser;
+    if (typeof parsed?.id !== "number" || typeof parsed?.username !== "string") {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function storeSession(session: AuthResponse): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(TOKEN_KEY, session.access_token);
+    window.localStorage.setItem(USER_KEY, JSON.stringify(session.user));
+  } catch {
+    // Storage may be disabled; the session still works for this page.
+  }
+}
+
+export function clearSession(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(TOKEN_KEY);
+    window.localStorage.removeItem(USER_KEY);
+  } catch {
+    // Ignore storage failures.
+  }
+  window.dispatchEvent(new Event(AUTH_EVENT));
+}
 
 export class ApiError extends Error {
   constructor(
@@ -42,8 +96,13 @@ async function request<T>(
   externalSignal?.addEventListener("abort", onAbort, { once: true });
 
   try {
+    const headers = new Headers(init.headers);
+    const token = readToken();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+
     const response = await fetch(`${BASE_PATH}${path}`, {
       ...init,
+      headers,
       signal: controller.signal,
       cache: "no-store",
     });
@@ -59,6 +118,9 @@ async function request<T>(
     }
 
     if (!response.ok) {
+      if (response.status === 401 && token && !path.startsWith("/auth/")) {
+        clearSession();
+      }
       const detail =
         readDetail(payload) ??
         (response.status === 503
@@ -119,4 +181,38 @@ export function ingestFiling(input: {
 
 export function checkBackend(): Promise<{ service: string }> {
   return request<{ service: string }>("/", {}, 6_000);
+}
+
+export function signup(
+  username: string,
+  password: string,
+): Promise<AuthResponse> {
+  return request<AuthResponse>(
+    "/auth/signup",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    },
+    15_000,
+  );
+}
+
+export function login(
+  username: string,
+  password: string,
+): Promise<AuthResponse> {
+  return request<AuthResponse>(
+    "/auth/login",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    },
+    15_000,
+  );
+}
+
+export function fetchCurrentUser(): Promise<AuthUser> {
+  return request<AuthUser>("/auth/me", {}, 10_000);
 }

@@ -2,13 +2,14 @@
 
 import {
   DatabaseIcon,
+  LogOutIcon,
   PlusIcon,
   TrashIcon,
   XIcon,
 } from "@/components/icons";
 import { relativeTime } from "@/lib/format";
 import type { BackendStatus } from "@/lib/use-backend-status";
-import type { Conversation } from "@/lib/types";
+import type { AuthUser, Conversation } from "@/lib/types";
 
 const STATUS_META: Record<
   BackendStatus,
@@ -39,23 +40,27 @@ export function Sidebar({
   activeId,
   open,
   backendStatus,
+  user,
   onClose,
   onSelect,
   onNew,
   onDelete,
   onIndex,
   onRecheck,
+  onLogout,
 }: {
   conversations: Conversation[];
   activeId: string | null;
   open: boolean;
   backendStatus: BackendStatus;
+  user: AuthUser;
   onClose: () => void;
   onSelect: (id: string) => void;
   onNew: () => void;
   onDelete: (id: string) => void;
   onIndex: () => void;
   onRecheck: () => void;
+  onLogout: () => void;
 }) {
   const status = STATUS_META[backendStatus];
 
@@ -199,6 +204,29 @@ export function Sidebar({
             <p className="mt-1 pl-4 text-[9.5px] text-stone-600">
               {status.detail}
             </p>
+          </div>
+
+          <div className="mb-2 flex items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.02] px-2.5 py-2">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-emerald-300/20 bg-emerald-300/[0.08] font-mono text-[11px] uppercase text-emerald-100">
+              {user.username.slice(0, 1)}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[11.5px] font-medium text-stone-300">
+                {user.username}
+              </p>
+              <p className="font-mono text-[8px] uppercase tracking-[0.14em] text-stone-600">
+                signed in
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onLogout}
+              aria-label="Sign out"
+              title="Sign out"
+              className="rounded-md p-1.5 text-stone-600 transition hover:bg-red-300/10 hover:text-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300/30"
+            >
+              <LogOutIcon className="h-3.5 w-3.5" />
+            </button>
           </div>
 
           <button

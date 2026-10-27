@@ -1,0 +1,16 @@
+.env
+.venv
+__pycache__
+*.py[cod]
+.pytest_cache
+.deepeval
+dump
+tests
+pytest.ini
+AGENTS.md
+SKILL.md.md
+check_endpoints.py
+inspect_filing.py
+processor.py
+.git
+.gitignore

@@ -147,3 +147,12 @@ export function BookOpenIcon(props: IconProps) {
     </Icon>
   );
 }
+
+export function LogOutIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M15 4h3a2 2 0 012 2v12a2 2 0 01-2 2h-3" />
+      <path d="M10 17l-5-5 5-5M5 12h10" />
+    </Icon>
+  );
+}

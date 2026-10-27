@@ -14,6 +14,7 @@ The full system swaps the dry run's local pieces for Kafka, Redis, and a persist
 
 - Answers grounded in indexed 10-K, 10-Q, and 8-K filings. Retrieval answers carry numbered sources with direct SEC links.
 - A guardrail before the planner. Off-topic prompts, investment advice, and prompt-injection attempts get a fixed refusal (`type: "blocked"`) instead of reaching the retrieval stack.
+- Username/password accounts. Signup and login issue a signed JWT, passwords are stored as bcrypt hashes in Postgres, and the chat and ingestion endpoints require a bearer token.
 - Asynchronous ingestion. On a cache miss, `POST /ingest/{ticker}` returns `202` and lets workers handle download, parse, embed, and upsert.
 - Sentence-level citations. Source links prefer an exact HTML anchor, fall back to a `#:~:text=` fragment, and finally to the filing URL.
 
@@ -117,19 +118,19 @@ The split is deliberate: the API does the fast part, and the slow, failure-prone
 
 - Python 3.12
 - Node.js 20.9 or newer
-- Docker, for Redis and Kafka
+- Docker, for Postgres, Redis, and Kafka
 - A Qdrant instance (Qdrant Cloud or a local server)
 - Service endpoints and keys for embeddings, reranking, and the Responses-style classifier/answer models
 - A Groq API key for the guardrail
 
-### 1. Start Redis and Kafka
+### 1. Start Postgres, Redis, and Kafka
 
 ```powershell
 cd backend
 docker compose up -d
 ```
 
-This starts Redis on `6379` and Kafka on `9092`. Qdrant is not in the compose file; point `QDRANT_URL` at your instance.
+This starts Postgres on `5433` (container port `5432`), Redis on `6379`, and Kafka on `9092`. The Postgres host port is `5433` so it does not collide with a local PostgreSQL install. Qdrant is not in the compose file; point `QDRANT_URL` at your instance. The `users` table is created on API startup.
 
 ### 2. Install the backend
 
@@ -140,7 +141,7 @@ pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
 
-Edit `.env` and fill in the Qdrant, model gateway, and Groq values. `.env.example` is the authoritative key list. Never commit `.env`.
+Edit `.env` and fill in the Qdrant, model gateway, and Groq values. Set `JWT_SECRET` to your own random value (at least 32 bytes); login and signup stay disabled with a `503` until it is set. `.env.example` is the authoritative key list. Never commit `.env`.
 
 ### 3. Verify the parser without external services
 
@@ -185,7 +186,7 @@ Open `http://localhost:3000`. The Next rewrite defaults to `http://127.0.0.1:800
 Use the **Index filing** button in the UI, or call the endpoint:
 
 ```powershell
-curl.exe -X POST "http://localhost:8000/ingest/AAPL?form_type=10-K&report_year=2025"
+curl.exe -X POST "http://localhost:8000/ingest/AAPL?form_type=10-K&report_year=2025" -H "Authorization: Bearer <token>"
 ```
 
 You can also bypass Kafka and write directly to Qdrant with the CLI:
@@ -196,13 +197,36 @@ You can also bypass Kafka and write directly to Qdrant with the CLI:
 
 The CLI path is useful for a single controlled ingest. The API path is the one that exercises the background pipeline.
 
+### Run the full stack with Docker Compose
+
+From the repository root:
+
+```powershell
+docker compose up --build
+```
+
+This builds and runs the frontend, API, both Kafka workers, Postgres, Redis, and Kafka:
+
+| Service | URL |
+| --- | --- |
+| Frontend | `http://localhost:3000` |
+| API and docs | `http://localhost:8001` and `http://localhost:8001/docs` |
+| Postgres | `localhost:5433` |
+| Redis | `localhost:6379` |
+| Kafka | `localhost:9092` |
+
+`backend/.env` is loaded as an optional env file. Compose overrides `DATABASE_URL`, `REDIS_URL`, and `KAFKA_BOOTSTRAP_SERVERS` with the in-network service names, and keeps your other provider settings. Set `JWT_SECRET` in that file before starting. If Qdrant runs on the host rather than in the cloud, use `host.docker.internal` in `QDRANT_URL` instead of `localhost`. Override host ports with `FRONTEND_PORT`, `BACKEND_PORT`, `POSTGRES_PORT`, `REDIS_PORT`, and `KAFKA_PORT`. Stop with `docker compose down`; add `-v` to delete the volumes.
+
 ## API
 
 | Endpoint | What it does |
 | --- | --- |
 | `GET /` | Returns the service name and a link to `/docs`. |
-| `POST /query` | Routes a prompt through the agent and returns `{type, answer, sources}`. |
-| `POST /ingest/{ticker}` | Resolves a ticker and queues a download job on a cache miss. Query parameters: `form_type`, `report_year`, `filing_year`. |
+| `POST /auth/signup` | Creates an account and returns `{access_token, token_type, expires_in, user}`. Usernames are lowercase, `3–32` chars of `a-z`, `0-9`, `_`, `.`, `-`; passwords are `8–72` chars. |
+| `POST /auth/login` | Verifies credentials and returns the same token payload. Invalid credentials return a generic `401`. |
+| `GET /auth/me` | Returns the current user. Requires `Authorization: Bearer <token>`. |
+| `POST /query` | Routes a prompt through the agent and returns `{type, answer, sources}`. Requires `Authorization: Bearer <token>`. |
+| `POST /ingest/{ticker}` | Resolves a ticker and queues a download job on a cache miss. Query parameters: `form_type`, `report_year`, `filing_year`. Requires `Authorization: Bearer <token>`. |
 | `GET /sec/filing` | Resolves, downloads, extracts, and dumps one filing synchronously. Useful for inspection, not for indexing. |
 | `GET /health` | Reports which `.env` keys loaded, with masked previews. Treat it as an internal diagnostic. |
 
@@ -235,6 +259,11 @@ Each source has a `citation` number that matches the numbered context given to t
 | `RERANK_URL`, `RERANK_KEY`, `RERANK_MODEL` | Cohere-style rerank endpoint. |
 | `GROQ` or `GROQ_API_KEY`, `GROQ_URL`, `GROQ_GUARDRAIL_MODEL` | Guardrail model. Default: `openai/gpt-oss-120b`. |
 | `REDIS_URL`, `REDIS_TTL_SECONDS` | Ticker cache and chunk staging. |
+| `DATABASE_URL` | SQLAlchemy URL for the auth database. Default: `postgresql+psycopg://rag:rag@localhost:5433/rag`. |
+| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Credentials used by the compose Postgres service. Defaults: `rag`/`rag`/`rag`. |
+| `POSTGRES_PORT` | Host port for the compose Postgres service. Default: `5433`. Update `DATABASE_URL` if you change it. |
+| `JWT_SECRET` | Signing key for access tokens. Required for signup, login, and protected routes; unset means `503`. |
+| `JWT_ALGORITHM`, `JWT_EXPIRE_MINUTES` | Token algorithm (`HS256`, `HS384`, or `HS512`) and lifetime. Defaults: `HS256`, `1440` minutes. |
 | `KAFKA_BOOTSTRAP_SERVERS`, `KAFKA_TOPIC`, `KAFKA_STEP2_TOPIC` | Kafka connection and the two topics. |
 | `CHUNK_PROCESSES`, `CHUNK_EMBED_BATCH_SIZE`, `CHUNK_UPLOAD_BATCH_SIZE` | Parser concurrency and embedding/upsert batch sizes. |
 | `BACKEND_URL` | Frontend-only rewrite target. Not read by FastAPI. |
@@ -247,6 +276,7 @@ The ticker cache is fail-open. The chunk worker's Redis dependency is not; it ne
 .
 ├── backend/
 │   ├── main.py                 FastAPI routes and request/response models
+│   ├── auth.py                 user model, bcrypt hashing, JWT, auth routes and dependency
 │   ├── retrieval_agent.py      LangGraph guardrail, planner, rewrite, retrieval, responder
 │   ├── retrieval_service.py    query embedding, Qdrant search, reranking, source formatting
 │   ├── input_guardrail.py      SEC-domain gate and fixed refusal
@@ -267,15 +297,15 @@ The ticker cache is fail-open. The chunk worker's Redis dependency is not; it ne
 │   ├── terminal_ui.py          loader download progress
 │   ├── cache.py                fail-open Redis JSON cache
 │   ├── index_filing.py         single-filing CLI
-│   ├── docker-compose.yml      Redis and Kafka
+│   ├── docker-compose.yml      Postgres, Redis, and Kafka
 │   ├── .env.example            configuration template
-│   └── tests/                  parser, resolver, worker, storage, and retrieval tests
+│   └── tests/                  parser, resolver, worker, storage, retrieval, and auth tests
 └── frontend/
     ├── next.config.ts          backend rewrite and proxy timeout
     └── src/
-        ├── app/page.tsx        chat shell and request lifecycle
-        ├── components/         message list, source cards, composer, sidebar, ingest dialog
-        └── lib/                API client, types, chat store, backend status
+        ├── app/page.tsx        auth gate, chat shell, and request lifecycle
+        ├── components/         auth screen, message list, source cards, composer, sidebar, ingest dialog
+        └── lib/                API client, auth hook, types, chat store, backend status
 ```
 
 ## Tests
@@ -303,12 +333,14 @@ npm run build
 - A cached ticker short-circuits `/ingest` with `200 cached` and does not enqueue a new job. For a deliberate re-index, use `index_filing.py` or remove the ticker cache entry.
 - In local testing, a retrieval query took roughly 30–50 seconds because it makes an embedding call, a Qdrant search, a rerank call, and an answer call. The frontend allows 180 seconds, and the Next rewrite proxy allows 240 seconds. The `experimental.proxyTimeout` setting in `frontend/next.config.ts` exists for that reason. A shorter proxy timeout produces a misleading Next.js `500` even when FastAPI is still working.
 - Conversation history is held in the FastAPI process, keyed by `X-Conversation-Id`. Restarting the API clears that history. The browser transcript stays in localStorage, but the agent's server-side context does not. Run one API process, or move history to shared storage before scaling out.
-- Redis is optional for ticker resolution and required for the worker's chunk staging. Kafka, Redis, Qdrant, and the model endpoints are all external dependencies; the compose file only provides the first two.
-- The API has no authentication or rate limiting. Add both before exposing it outside a trusted network. `.env` values stay server-side; the browser only talks to the Next rewrite.
+- Redis is optional for ticker resolution and required for the worker's chunk staging. Postgres, Kafka, Redis, Qdrant, and the model endpoints are all external dependencies; the compose file provides the first three.
+- `/query` and `/ingest/{ticker}` require a bearer token; `/`, `/health`, and `/sec/filing` stay public. Rate limiting is still absent. Add it before exposing the API outside a trusted network. `.env` values stay server-side; the browser only talks to the Next rewrite.
 - `dump/` holds raw SEC filings and is ignored by git. Delete entries to reclaim disk space; reprocessing requires the file or a fresh download.
 
 ## Security
 
 Provider keys live in `backend/.env`. They are not bundled into the frontend and are not exposed through `/query`. Do not commit `.env`, and do not put real keys in `.env.example`.
+
+Generate a signing key with `python -c "import secrets; print(secrets.token_urlsafe(48))"` and put it in `JWT_SECRET`. Passwords are bcrypt-hashed; tokens are stateless HS256 JWTs with a configurable expiry. The browser keeps the token in `localStorage`, so any XSS on the frontend can read it; keep dependencies patched and avoid injecting untrusted HTML. Logging out clears the token, cached user, and the local conversation list.
 
 `GET /health` intentionally reports key names and masked previews so a local setup can be diagnosed. Restrict or remove it if the API is reachable by untrusted clients.

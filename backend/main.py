@@ -1,3 +1,4 @@
+import logging
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -5,11 +6,12 @@ from pathlib import Path
 from typing import Literal
 
 from dotenv import dotenv_values
-from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from async_sec import AsyncSecClient, resolve_company_async
+from auth import CurrentUser, get_current_user, init_db, router as auth_router
 from cache import DEFAULT_REDIS_URL, RedisCache, ticker_cache_key
 from document_extractor import EmptyExtractionError, ExtractionError
 from filing_resolver import (
@@ -41,10 +43,16 @@ from sec_pipeline import fetch_filing
 
 ENV_PATH = Path(__file__).resolve().parent / ".env"
 
+LOGGER = logging.getLogger("main")
+
 _loaded_keys: set[str] = set()
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    try:
+        init_db()
+    except Exception as exc:
+        LOGGER.warning("database schema is not ready: %s", exc)
     yield
     try:
         await close_producer()
@@ -53,6 +61,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="RAG Backend", lifespan=lifespan)
+app.include_router(auth_router)
 
 
 class QueryRequest(BaseModel):
@@ -226,6 +235,7 @@ async def ingest_ticker(
     filing_year: int | None = Query(
         None, description="Calendar filing year, matched against filingDate"
     ),
+    _user: CurrentUser = Depends(get_current_user),
 ):
     """Resolve a ticker and enqueue an asynchronous filing download.
 
@@ -311,6 +321,7 @@ async def query(
         default=None,
         alias="X-Conversation-Id",
     ),
+    _user: CurrentUser = Depends(get_current_user),
 ):
     """Route a user prompt and answer, retrieving filing context when needed."""
     reload_env()

@@ -20,6 +20,12 @@ langchain-google-genai      # LangChain integration for Gemini models
 qdrant-client               # Vector Database for semantic search
 flashrank                   # Ultra-fast local cross-encoder for semantic reranking
 
+# --- AUTH & POSTGRES ---
+sqlalchemy>=2.0             # Users table and session management
+psycopg[binary]>=3.2        # PostgreSQL driver (psycopg 3)
+PyJWT>=2.9                  # JWT access tokens
+bcrypt>=4.2                 # Password hashing
+
 # --- CACHE & QUEUE ---
 redis                       # Ticker-resolution cache (company, CIK, year)
 httpx                       # Async SEC HTTP client for API and worker

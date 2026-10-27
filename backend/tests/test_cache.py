@@ -113,7 +113,7 @@ def test_resolve_company_writes_resolution_on_miss():
     }
 
 
-def test_ingest_cache_hit_returns_resolution_without_queueing(monkeypatch):
+def test_ingest_cache_hit_returns_resolution_without_queueing(monkeypatch, auth_headers):
     cache = FakeCache(
         {
             ticker_cache_key("AAPL"): {
@@ -134,6 +134,7 @@ def test_ingest_cache_hit_returns_resolution_without_queueing(monkeypatch):
     response = client.post(
         "/ingest/AAPL",
         params={"form_type": "10-K", "report_year": 2025},
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
@@ -150,7 +151,7 @@ def test_ingest_cache_hit_returns_resolution_without_queueing(monkeypatch):
     assert cache.writes == []
 
 
-def test_ingest_cache_miss_resolves_queues_and_caches(monkeypatch):
+def test_ingest_cache_miss_resolves_queues_and_caches(monkeypatch, auth_headers):
     cache = FakeCache()
     published = []
 
@@ -172,6 +173,7 @@ def test_ingest_cache_miss_resolves_queues_and_caches(monkeypatch):
     response = client.post(
         "/ingest/AAPL",
         params={"form_type": "10-k", "report_year": 2025},
+        headers=auth_headers,
     )
 
     assert response.status_code == 202
@@ -199,7 +201,7 @@ def test_ingest_cache_miss_resolves_queues_and_caches(monkeypatch):
     }
 
 
-def test_ingest_queue_failure_returns_503_and_does_not_cache(monkeypatch):
+def test_ingest_queue_failure_returns_503_and_does_not_cache(monkeypatch, auth_headers):
     cache = FakeCache()
 
     async def fake_resolve(ticker, client, cache=None, year=None):
@@ -214,7 +216,11 @@ def test_ingest_queue_failure_returns_503_and_does_not_cache(monkeypatch):
     monkeypatch.setattr(main, "publish_filing_job", failing_publish)
 
     client = TestClient(main.app)
-    response = client.post("/ingest/AAPL", params={"report_year": 2025})
+    response = client.post(
+        "/ingest/AAPL",
+        params={"report_year": 2025},
+        headers=auth_headers,
+    )
 
     assert response.status_code == 503
     assert "kafka down" in response.json()["detail"]
