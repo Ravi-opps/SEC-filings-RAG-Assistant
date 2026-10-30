@@ -26,7 +26,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#070a0f",
+  themeColor: "#0a0a08",
   colorScheme: "dark",
 };
 
@@ -36,7 +36,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} ${instrumentSerif.variable} h-full antialiased`}
     >
-      <body className="h-full overflow-hidden bg-[#070a0f]">{children}</body>
+      <body className="h-full overflow-hidden bg-canvas text-body">
+        {children}
+      </body>
     </html>
   );
 }

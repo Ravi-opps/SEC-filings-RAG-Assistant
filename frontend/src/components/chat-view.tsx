@@ -36,20 +36,21 @@ function EmptyState({
   onIndex: () => void;
 }) {
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col px-4 pb-10 pt-10 sm:px-8 sm:pt-16">
+    <div className="mx-auto flex w-full max-w-3xl flex-col px-4 pb-12 pt-12 sm:px-8 sm:pt-20">
       <div className="relative">
-        <div className="pointer-events-none absolute -left-8 -top-14 select-none font-serif text-[160px] leading-none text-white/[0.018] sm:-left-14 sm:text-[220px]">
+        <div className="pointer-events-none absolute -left-8 -top-14 select-none font-serif text-[160px] leading-none text-ink/[0.02] sm:-left-14 sm:text-[220px]">
           10-K
         </div>
-        <p className="relative font-mono text-[9.5px] uppercase tracking-[0.28em] text-emerald-200/70">
+        <p className="relative inline-flex items-center gap-2 font-mono text-[9.5px] uppercase tracking-[0.28em] text-lemon">
+          <span className="h-1.5 w-1.5 bg-lemon" />
           SEC filing intelligence
         </p>
-        <h1 className="relative mt-4 max-w-xl font-serif text-[38px] leading-[1.08] text-stone-100 sm:text-[52px]">
+        <h1 className="relative mt-5 max-w-xl font-serif text-display-md text-ink sm:text-display-xl">
           Ask the filing.
           <br />
-          <span className="text-stone-400">Not the open web.</span>
+          <span className="text-muted">Not the open web.</span>
         </h1>
-        <p className="relative mt-5 max-w-lg text-[13.5px] leading-6 text-stone-500">
+        <p className="relative mt-6 max-w-lg text-[14px] leading-7 text-body">
           A retrieval desk for annual and quarterly reports. Every answer is
           built from indexed passages and carries a citation back to the exact
           source on SEC EDGAR.
@@ -57,15 +58,15 @@ function EmptyState({
       </div>
 
       {backendStatus === "offline" ? (
-        <div className="mt-8 flex items-start gap-3 rounded-xl border border-amber-300/15 bg-amber-300/[0.05] px-4 py-3">
-          <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-300" />
+        <div className="mt-8 flex items-start gap-3 rounded-xl border border-warn/20 bg-warn/[0.06] px-4 py-3">
+          <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-warn" />
           <div>
-            <p className="text-[12px] font-medium text-amber-100/90">
+            <p className="text-[12px] font-medium text-warn">
               Retrieval backend is offline
             </p>
-            <p className="mt-0.5 text-[11.5px] leading-5 text-stone-500">
+            <p className="mt-0.5 text-[11.5px] leading-5 text-muted">
               Start FastAPI with{" "}
-              <code className="rounded bg-white/[0.06] px-1 py-0.5 font-mono text-[10.5px] text-stone-300">
+              <code className="rounded border border-hairline bg-surface-card px-1 py-0.5 font-mono text-[10.5px] text-body">
                 python main.py
               </code>{" "}
               in the backend folder, then send a question.
@@ -76,10 +77,10 @@ function EmptyState({
 
       <div className="mt-10">
         <div className="mb-3 flex items-center gap-3">
-          <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-stone-600">
+          <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-soft">
             Start with a line of inquiry
           </p>
-          <span className="h-px flex-1 bg-white/[0.06]" />
+          <span className="h-px flex-1 bg-hairline" />
         </div>
         <div className="grid gap-2 sm:grid-cols-2">
           {SUGGESTIONS.map((suggestion) => (
@@ -88,15 +89,15 @@ function EmptyState({
               type="button"
               onClick={() => onSend(suggestion.prompt)}
               disabled={backendStatus === "offline"}
-              className="group flex flex-col gap-2.5 rounded-xl border border-white/[0.07] bg-white/[0.02] p-4 text-left transition hover:border-emerald-300/25 hover:bg-emerald-300/[0.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/30 disabled:cursor-not-allowed disabled:opacity-50"
+              className="group flex flex-col gap-3 rounded-xl border border-hairline bg-surface-card/60 p-4 text-left transition hover:border-lemon/30 hover:bg-surface-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lemon/30 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <span className="flex items-center justify-between">
-                <span className="font-mono text-[8.5px] uppercase tracking-[0.18em] text-stone-600 transition group-hover:text-emerald-200/60">
+                <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-muted-soft transition group-hover:text-lemon">
                   {suggestion.category}
                 </span>
-                <ArrowUpRightIcon className="h-3.5 w-3.5 text-stone-700 transition group-hover:text-emerald-200" />
+                <ArrowUpRightIcon className="h-3.5 w-3.5 text-muted-soft transition group-hover:text-lemon" />
               </span>
-              <span className="text-[12.5px] leading-5 text-stone-300">
+              <span className="text-[12.5px] leading-5 text-body transition group-hover:text-ink">
                 {suggestion.prompt}
               </span>
             </button>
@@ -104,15 +105,15 @@ function EmptyState({
         </div>
       </div>
 
-      <div className="mt-10 flex flex-wrap items-center justify-between gap-4 border-t border-white/[0.06] pt-5">
-        <div className="flex items-center gap-2 text-[11px] text-stone-600">
+      <div className="mt-10 flex flex-wrap items-center justify-between gap-4 border-t border-hairline pt-5">
+        <div className="flex items-center gap-2 text-[11px] text-muted-soft">
           <SearchIcon className="h-3.5 w-3.5" />
           Answers only draw from filings already in the index.
         </div>
         <button
           type="button"
           onClick={onIndex}
-          className="text-[11px] font-medium text-emerald-200/80 underline decoration-emerald-300/25 underline-offset-4 transition hover:text-emerald-100 hover:decoration-emerald-300/60"
+          className="text-[11px] font-medium text-lemon underline decoration-lemon/30 underline-offset-4 transition hover:decoration-lemon"
         >
           Index a filing
         </button>

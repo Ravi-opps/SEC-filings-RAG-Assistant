@@ -156,3 +156,30 @@ export function LogOutIcon(props: IconProps) {
     </Icon>
   );
 }
+
+export function DocumentIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M7 3h7l4 4v14H7z" />
+      <path d="M14 3v4h4M10 12h5M10 16h5" />
+    </Icon>
+  );
+}
+
+export function LinkIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
+    </Icon>
+  );
+}
+
+export function SpikeMark(props: IconProps) {
+  return (
+    <Icon strokeWidth={2} {...props}>
+      <path d="M12 2.5v19M2.5 12h19" />
+      <path d="M5.3 5.3l13.4 13.4M18.7 5.3L5.3 18.7" />
+    </Icon>
+  );
+}

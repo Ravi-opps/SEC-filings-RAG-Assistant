@@ -1,13 +1,14 @@
+import json
 import logging
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from dotenv import dotenv_values
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from async_sec import AsyncSecClient, resolve_company_async
@@ -30,6 +31,7 @@ from retrieval_agent import (
     ResponderError,
     close_agent_runtime,
     run_agent,
+    stream_agent,
 )
 from retrieval_service import RetrievalConfigError, RetrievalError
 from sec_client import (
@@ -354,6 +356,66 @@ async def query(
         for source in state.get("sources") or []
     ]
     return QueryResponse(type=route, answer=answer, sources=sources)
+
+
+def _sse(event: str, data: Any) -> str:
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+@app.post("/query/stream")
+async def query_stream(
+    request: QueryRequest,
+    conversation_id: str | None = Header(
+        default=None,
+        alias="X-Conversation-Id",
+    ),
+    _user: CurrentUser = Depends(get_current_user),
+):
+    """Stream a routed answer as Server-Sent Events."""
+    reload_env()
+    prompt = request.user_prompt.strip()
+    if not prompt:
+        raise HTTPException(status_code=422, detail="user prompt cannot be empty")
+    conversation_id = (conversation_id or "default").strip()[:128] or "default"
+
+    async def events():
+        yield _sse("status", {"stage": "accepted"})
+        try:
+            async for item in stream_agent(
+                prompt,
+                conversation_id=conversation_id,
+            ):
+                event = str(item.get("event") or "message")
+                yield _sse(event, item.get("data"))
+        except (
+            PlannerConfigError,
+            RetrievalConfigError,
+            GuardrailConfigError,
+        ) as exc:
+            yield _sse("error", {"detail": str(exc), "status": 503})
+        except (
+            PlannerError,
+            ResponderError,
+            RetrievalError,
+            GuardrailError,
+        ) as exc:
+            yield _sse("error", {"detail": str(exc), "status": 502})
+        except Exception:
+            LOGGER.exception("streaming query failed")
+            yield _sse(
+                "error",
+                {"detail": "The retrieval request failed.", "status": 500},
+            )
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 if __name__ == "__main__":

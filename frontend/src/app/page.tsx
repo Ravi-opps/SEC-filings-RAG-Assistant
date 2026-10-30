@@ -9,11 +9,17 @@ import { DatabaseIcon, MenuIcon } from "@/components/icons";
 import { IngestDialog } from "@/components/ingest-dialog";
 import { Sidebar } from "@/components/sidebar";
 import { SourceSheet } from "@/components/source-card";
-import { askQuestion } from "@/lib/api";
+import { askQuestionStream } from "@/lib/api";
 import { useAuth } from "@/lib/use-auth";
 import { makeTitle, useChatStore } from "@/lib/use-chat-store";
 import { useBackendStatus } from "@/lib/use-backend-status";
 import type { ChatMessage, Source } from "@/lib/types";
+
+const ROUTE_LABEL: Record<string, string> = {
+  retrieval: "grounded inquiry",
+  conversational: "direct answer",
+  blocked: "guardrail",
+};
 
 export default function Home() {
   const auth = useAuth();
@@ -61,17 +67,62 @@ export default function Home() {
       appendMessage(conversationId, assistantMessage);
       setPendingIds((previous) => new Set(previous).add(conversationId));
 
+      let streamed = "";
+      let lastFlush = 0;
+      let flushTimer: number | null = null;
+
+      const flush = () => {
+        lastFlush = Date.now();
+        patchMessage(conversationId, assistantMessage.id, {
+          content: streamed,
+        });
+      };
+      const clearFlushTimer = () => {
+        if (flushTimer !== null) {
+          window.clearTimeout(flushTimer);
+          flushTimer = null;
+        }
+      };
+      const scheduleFlush = () => {
+        if (flushTimer !== null) return;
+        const wait = Math.max(0, 60 - (Date.now() - lastFlush));
+        flushTimer = window.setTimeout(() => {
+          flushTimer = null;
+          flush();
+        }, wait);
+      };
+
       try {
-        const response = await askQuestion(text, conversationId);
+        const response = await askQuestionStream(text, conversationId, {
+          onStatus: (stage) =>
+            patchMessage(conversationId, assistantMessage.id, { stage }),
+          onSources: (sources) =>
+            patchMessage(conversationId, assistantMessage.id, { sources }),
+          onDelta: (chunk) => {
+            streamed += chunk;
+            if (Date.now() - lastFlush >= 60) {
+              clearFlushTimer();
+              flush();
+            } else {
+              scheduleFlush();
+            }
+          },
+        });
+
+        clearFlushTimer();
         patchMessage(conversationId, assistantMessage.id, {
           status: response.type === "blocked" ? "blocked" : "complete",
           route: response.type,
-          content: response.answer ?? "",
+          content: response.answer ?? streamed,
           sources: response.sources ?? [],
+          stage: undefined,
         });
       } catch (caught) {
+        clearFlushTimer();
         patchMessage(conversationId, assistantMessage.id, {
           status: "error",
+          content: streamed,
+          stage: undefined,
           error:
             caught instanceof Error
               ? caught.message
@@ -123,7 +174,7 @@ export default function Home() {
     .find((message) => message.route)?.route;
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-[#070a0f] text-stone-200">
+    <div className="flex h-dvh overflow-hidden bg-canvas text-body">
       <Sidebar
         conversations={store.conversations}
         activeId={activeId}
@@ -148,53 +199,47 @@ export default function Home() {
         }}
       />
 
-      <main className="relative flex min-w-0 flex-1 flex-col bg-[#080b10] bg-[radial-gradient(120%_75%_at_50%_-20%,rgba(110,231,183,0.05),transparent_55%)]">
-        <header className="z-20 flex h-14 shrink-0 items-center gap-3 border-b border-white/[0.06] bg-[#080b10]/70 px-4 backdrop-blur-xl sm:px-6">
+      <main className="relative flex min-w-0 flex-1 flex-col bg-canvas bg-[radial-gradient(120%_75%_at_50%_-20%,rgba(215,255,62,0.045),transparent_55%)]">
+        <header className="z-20 flex h-16 shrink-0 items-center gap-3 border-b border-hairline bg-canvas/80 px-4 backdrop-blur-xl sm:px-6">
           <button
             type="button"
             onClick={() => setSidebarOpen(true)}
-            className="rounded-lg border border-white/10 p-1.5 text-stone-400 transition hover:border-white/20 hover:text-stone-100 lg:hidden"
+            className="rounded-lg border border-hairline p-1.5 text-muted transition hover:border-hairline-soft hover:bg-surface-soft hover:text-ink lg:hidden"
             aria-label="Open navigation"
           >
             <MenuIcon className="h-4 w-4" />
           </button>
 
           <div className="min-w-0">
-            <p className="flex items-center gap-1.5 font-mono text-[8px] uppercase tracking-[0.2em] text-stone-600">
+            <p className="flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.2em] text-muted-soft">
               Filing Room
-              <span className="text-stone-700">/</span>
-              <span className={lastRoute ? "text-stone-500" : ""}>
-                {lastRoute === "retrieval"
-                  ? "grounded inquiry"
-                  : lastRoute === "conversational"
-                    ? "direct answer"
-                    : lastRoute === "blocked"
-                      ? "guardrail"
-                      : "inquiry"}
+              <span className="text-hairline">/</span>
+              <span className={lastRoute ? "text-lemon/80" : ""}>
+                {ROUTE_LABEL[lastRoute ?? ""] ?? "inquiry"}
               </span>
             </p>
-            <h1 className="max-w-[46vw] truncate font-serif text-[17px] leading-tight text-stone-200 sm:max-w-md">
+            <h1 className="max-w-[46vw] truncate font-serif text-[17px] leading-tight text-ink sm:max-w-md">
               {active?.title ?? "New inquiry"}
             </h1>
           </div>
 
           <div className="ml-auto flex items-center gap-2">
-            <div className="hidden items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.02] px-2.5 py-1 sm:flex">
+            <div className="hidden items-center gap-2 rounded-full border border-hairline bg-surface-soft px-2.5 py-1 sm:flex">
               <span className="relative flex h-1.5 w-1.5">
                 {backendStatus === "online" ? (
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-300/50" />
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-lemon/50" />
                 ) : null}
                 <span
                   className={`relative inline-flex h-1.5 w-1.5 rounded-full ${
                     backendStatus === "online"
-                      ? "bg-emerald-300"
+                      ? "bg-lemon"
                       : backendStatus === "offline"
-                        ? "bg-red-400"
-                        : "bg-stone-400"
+                        ? "bg-danger"
+                        : "bg-muted"
                   }`}
                 />
               </span>
-              <span className="font-mono text-[8.5px] uppercase tracking-[0.14em] text-stone-500">
+              <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted">
                 {backendStatus === "online"
                   ? "API online"
                   : backendStatus === "offline"
@@ -205,7 +250,7 @@ export default function Home() {
             <button
               type="button"
               onClick={() => setIngestOpen(true)}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-white/10 px-2.5 text-[11px] font-medium text-stone-400 transition hover:border-emerald-300/25 hover:text-emerald-100"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-hairline bg-surface-soft px-3 text-[11.5px] font-medium text-muted transition hover:border-lemon/30 hover:text-ink"
             >
               <DatabaseIcon className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Index filing</span>
@@ -236,7 +281,12 @@ export default function Home() {
         onQueued={recheck}
       />
 
-      <SourceSheet source={sourceSheet} onClose={() => setSourceSheet(null)} />
+      {sourceSheet ? (
+        <SourceSheet
+          source={sourceSheet}
+          onClose={() => setSourceSheet(null)}
+        />
+      ) : null}
     </div>
   );
 }

@@ -6,7 +6,16 @@ import asyncio
 import inspect
 import json
 import os
-from typing import Annotated, Any, Awaitable, Callable, Literal, TypedDict
+from typing import (
+    Annotated,
+    Any,
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Literal,
+    Optional,
+    TypedDict,
+)
 
 import httpx
 from langchain_core.messages import (
@@ -16,6 +25,8 @@ from langchain_core.messages import (
     ToolMessage,
     convert_to_messages,
 )
+from langchain_core.runnables import RunnableConfig
+from langgraph.config import get_stream_writer
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, ValidationError
@@ -81,6 +92,11 @@ ResponderFn = Callable[
     Awaitable[str] | str,
 ]
 
+AnswerStreamerFn = Callable[
+    [str, History, str | None],
+    AsyncIterator[str],
+]
+
 RewriterFn = Callable[[str, History], Awaitable[str] | str]
 
 RetrieverFn = Callable[[str], Awaitable[list[RetrievedChunk]]]
@@ -94,35 +110,57 @@ GuardFn = Callable[
 PLANNER_SYSTEM_PROMPT = """You are the routing planner for a SEC filing retrieval assistant.
 You do not answer the user. You only decide how the latest user message should be handled.
 
-Choose "conversational" when the latest message is:
-- a greeting, thanks, farewell, or small talk;
-- a general or out-of-scope question that can be answered without the SEC filing index;
-- a repetition of an earlier question whose answer is already in the conversation history;
-- answerable from the conversation history alone;
-- a clarification, acknowledgement, or follow-up that needs no vector store lookup.
+The assistant may state company facts only when they come from indexed SEC filing context.
+Your own knowledge of companies, financials, or current events is not a permitted source.
+Never route a request for company or filing facts to "conversational" just because the answer
+is well known, seems obvious, or you could answer it without searching.
 
 Choose "retrieval" when the latest message:
-- asks about a company, SEC filing, financial statement, risk factor, MD&A, or other filing content;
-- requires facts, quotes, comparisons, or analysis from the indexed filings;
-- is a follow-up that cannot be answered from the conversation history and needs a vector store lookup;
+- asks about a company, SEC filing, financial statement, financial metric, risk factor, MD&A,
+  or any other filing content;
+- asks for any fact, figure, date, quote, comparison, or analysis about a public company,
+  including revenue, income, profit, earnings, expenses, margins, segments, employees,
+  guidance, litigation, or executive compensation;
+- asks a follow-up that needs filing facts not already stated in the conversation;
 - is ambiguous about whether filing evidence is needed. Default to retrieval when unsure.
 
-First check whether the conversation history already contains enough information to answer the latest message.
-If it does, return "conversational". If it does not and filing evidence is needed, return "retrieval".
-Do not decide from keywords alone. Use the conversation history and the latest message.
+Choose "conversational" only when the latest message:
+- is a greeting, thanks, farewell, or small talk;
+- asks about the assistant's capabilities or how to use it;
+- is a clarification or acknowledgement that requests no new factual answer;
+- asks about an answer or retrieved context already present in the conversation history,
+  without requesting new facts;
+- repeats a question whose answer is already present in the conversation history and that
+  answer was grounded in filing context.
+
+Do not choose "conversational" merely because the conversation history exists or because you
+believe you know the answer from training data. If the latest message requests company facts
+and the grounding is not already in the conversation, return "retrieval".
 Return only one JSON object, with exactly one key named "type".
 Allowed values: "conversational" or "retrieval".
 """
 
 
-CONVERSATIONAL_SYSTEM_PROMPT = """You are the conversational assistant for a SEC filing research system.
-Use the provided conversation history and, when present, the retrieved filing context.
+CONVERSATIONAL_SYSTEM_PROMPT = """You are the grounded answer assistant for a SEC filing research system.
+You may use only these sources:
+1. the retrieved filing context provided in this prompt;
+2. filing facts already established in the conversation history, including prior retrieved context.
 
-If retrieved context is present, answer from it and prefer it over general knowledge.
-Cite the numbered retrieved chunks you use.
-If the context is missing or insufficient, say so briefly instead of inventing filing facts.
-If no retrieved context is present, answer from the conversation history alone.
-Be concise, natural, and helpful.
+You must not use your own pretrained knowledge about companies, financials, markets, or events.
+Every factual claim about a company must be supported by the retrieved filing context or by
+filing facts already present in the conversation history.
+
+Rules:
+- Never answer a company or filing factual question from memory, even if you are confident.
+- Do not guess, estimate, or fill gaps with plausible numbers, dates, or figures.
+- When retrieved filing context is present, answer only from it and cite the numbered chunks
+  you use, for example [1], [2].
+- If the needed facts are not present in the retrieved context or the conversation history,
+  say that you could not find the answer in the indexed filings and suggest retrieving or
+  indexing the relevant filing. Do not answer from general knowledge.
+- Greetings, thanks, capability questions, and clarifications that request no filing facts may
+  be answered naturally without citations.
+- Be concise and helpful.
 """
 
 QUERY_REWRITE_SYSTEM_PROMPT = """You rewrite the latest user message into a self-sufficient search query
@@ -203,11 +241,14 @@ def build_conversational_prompt(
     retrieved_context: str | None = None,
 ) -> str:
     history = format_conversation(conversation)
-    context_block = ""
     if retrieved_context:
         context_block = f"""
 Retrieved filing context:
 {retrieved_context}
+"""
+    else:
+        context_block = """
+Retrieved filing context: none for this turn.
 """
     return f"""Conversation history (oldest first):
 {history}
@@ -216,6 +257,9 @@ Latest user message:
 {current_msg}
 
 Respond to the latest user message.
+Answer company or filing factual questions only from the retrieved filing context or from filing
+facts already present in the conversation history. If the required facts are not there, say you
+could not find the answer in the indexed filings. Do not answer from general knowledge.
 """
 
 
@@ -442,13 +486,15 @@ class LLMResponder:
             self._client = httpx.AsyncClient(timeout=self.timeout)
         return self._client
 
-    async def respond(
+    def _body(
         self,
         current_msg: str,
         conversation: History | None,
-        retrieved_context: str | None = None,
-    ) -> str:
-        body = {
+        retrieved_context: str | None,
+        *,
+        stream: bool,
+    ) -> dict[str, Any]:
+        body: dict[str, Any] = {
             "model": self.model,
             "instructions": CONVERSATIONAL_SYSTEM_PROMPT,
             "input": build_conversational_prompt(
@@ -457,14 +503,35 @@ class LLMResponder:
                 retrieved_context,
             ),
         }
+        if stream:
+            body["stream"] = True
+        return body
+
+    def _headers(self, *, stream: bool = False) -> dict[str, str]:
         headers = {
             "api-key": self.api_key,
             "Content-Type": "application/json",
         }
+        if stream:
+            headers["Accept"] = "text/event-stream"
+        return headers
+
+    async def respond(
+        self,
+        current_msg: str,
+        conversation: History | None,
+        retrieved_context: str | None = None,
+    ) -> str:
+        body = self._body(
+            current_msg,
+            conversation,
+            retrieved_context,
+            stream=False,
+        )
         try:
             response = await self.client.post(
                 self.url,
-                headers=headers,
+                headers=self._headers(),
                 json=body,
             )
         except httpx.HTTPError as exc:
@@ -482,6 +549,112 @@ class LLMResponder:
         if not answer:
             raise ResponderError("conversational response was empty")
         return answer
+
+    async def respond_stream(
+        self,
+        current_msg: str,
+        conversation: History | None,
+        retrieved_context: str | None = None,
+    ) -> AsyncIterator[str]:
+        body = self._body(
+            current_msg,
+            conversation,
+            retrieved_context,
+            stream=True,
+        )
+        headers = self._headers(stream=True)
+        try:
+            async with self.client.stream(
+                "POST",
+                self.url,
+                headers=headers,
+                json=body,
+            ) as response:
+                if response.status_code >= 400:
+                    await response.aread()
+                    raise ResponderError(
+                        "conversational request failed with "
+                        f"status {response.status_code}"
+                    )
+
+                content_type = response.headers.get("content-type", "").lower()
+                if "text/event-stream" not in content_type:
+                    raw = await response.aread()
+                    try:
+                        payload = json.loads(raw)
+                    except (TypeError, ValueError) as exc:
+                        raise ResponderError(
+                            "conversational response was not JSON"
+                        ) from exc
+                    answer = _response_content(payload).strip()
+                    if not answer:
+                        raise ResponderError("conversational response was empty")
+                    yield answer
+                    return
+
+                emitted = False
+                done_text: str | None = None
+                async for line in response.aiter_lines():
+                    if not line or line.startswith(":"):
+                        continue
+                    if not line.startswith("data:"):
+                        continue
+                    data = line[len("data:") :].strip()
+                    if not data or data == "[DONE]":
+                        continue
+                    try:
+                        payload = json.loads(data)
+                    except (TypeError, ValueError):
+                        continue
+                    if not isinstance(payload, dict):
+                        continue
+
+                    event_type = payload.get("type")
+                    if event_type == "response.output_text.delta":
+                        delta = payload.get("delta")
+                        if isinstance(delta, str) and delta:
+                            emitted = True
+                            yield delta
+                        continue
+                    if event_type == "response.output_text.done":
+                        text = payload.get("text")
+                        if isinstance(text, str) and text.strip():
+                            done_text = text
+                        continue
+                    if event_type in {"response.failed", "error"}:
+                        detail = payload.get("message")
+                        if not isinstance(detail, str) or not detail.strip():
+                            detail = "conversational stream failed"
+                        raise ResponderError(detail)
+                    if event_type == "response.completed":
+                        if not emitted and not done_text:
+                            completed = payload.get("response")
+                            if isinstance(completed, dict):
+                                try:
+                                    done_text = _response_content(completed)
+                                except PlannerError:
+                                    done_text = None
+                        continue
+
+                    choices = payload.get("choices")
+                    if isinstance(choices, list) and choices:
+                        choice = choices[0]
+                        delta = choice.get("delta") if isinstance(choice, dict) else None
+                        if isinstance(delta, dict):
+                            text = delta.get("content")
+                            if isinstance(text, str) and text:
+                                emitted = True
+                                yield text
+
+                if not emitted and done_text:
+                    emitted = True
+                    yield done_text
+                if not emitted:
+                    raise ResponderError("conversational response was empty")
+        except httpx.HTTPError as exc:
+            raise ResponderError(
+                f"conversational stream failed: {exc}"
+            ) from exc
 
     async def close(self) -> None:
         if self._client is not None and self._owns_client:
@@ -540,17 +713,36 @@ def _coerce_guard_decision(
     raise GuardrailError("guardrail returned an invalid decision")
 
 
+def _stream_writer(
+    config: Optional[RunnableConfig],
+) -> Callable[[Any], None] | None:
+    configurable = (config or {}).get("configurable") or {}
+    if not configurable.get("stream"):
+        return None
+    try:
+        return get_stream_writer()
+    except Exception:
+        return None
+
+
 def build_agent_graph(
     planner: PlannerFn,
     conversationalist: ResponderFn,
     rewriter: RewriterFn | None = None,
     retriever: RetrieverFn | None = None,
     guardrail: GuardFn | None = None,
+    answer_streamer: AnswerStreamerFn | None = None,
 ):
     rewrite = rewriter or _identity_rewrite
     guard = guardrail or _allow_all_guard
 
-    async def guardrail_node(state: AgentState) -> dict[str, Any]:
+    async def guardrail_node(
+        state: AgentState,
+        config: Optional[RunnableConfig] = None,
+    ) -> dict[str, Any]:
+        writer = _stream_writer(config)
+        if writer is not None:
+            writer({"event": "status", "data": {"stage": "guardrail"}})
         try:
             result = guard(
                 state.get("current_msg", ""),
@@ -580,7 +772,13 @@ def build_agent_graph(
             "status": "allowed",
         }
 
-    async def planner_node(state: AgentState) -> dict[str, Any]:
+    async def planner_node(
+        state: AgentState,
+        config: Optional[RunnableConfig] = None,
+    ) -> dict[str, Any]:
+        writer = _stream_writer(config)
+        if writer is not None:
+            writer({"event": "status", "data": {"stage": "planning"}})
         try:
             result = planner(
                 state.get("current_msg", ""),
@@ -598,20 +796,40 @@ def build_agent_graph(
             "status": "planned",
         }
 
-    async def conversational_node(state: AgentState) -> dict[str, Any]:
+    async def conversational_node(
+        state: AgentState,
+        config: Optional[RunnableConfig] = None,
+    ) -> dict[str, Any]:
         history = list(state.get("conversation") or [])
         retrieved = state.get("status") == "retrieved"
         if retrieved:
             history = history[:-2]
+        writer = _stream_writer(config)
+        if writer is not None:
+            writer({"event": "status", "data": {"stage": "answering"}})
         try:
-            result = conversationalist(
-                state.get("current_msg", ""),
-                history,
-                state.get("retrieved_context") or None,
-            )
-            if inspect.isawaitable(result):
-                result = await result
-            answer = str(result or "").strip()
+            if writer is not None and answer_streamer is not None:
+                parts: list[str] = []
+                stream = answer_streamer(
+                    state.get("current_msg", ""),
+                    history,
+                    state.get("retrieved_context") or None,
+                )
+                async for piece in stream:
+                    if not piece:
+                        continue
+                    parts.append(piece)
+                    writer({"event": "delta", "data": {"text": piece}})
+                answer = "".join(parts).strip()
+            else:
+                result = conversationalist(
+                    state.get("current_msg", ""),
+                    history,
+                    state.get("retrieved_context") or None,
+                )
+                if inspect.isawaitable(result):
+                    result = await result
+                answer = str(result or "").strip()
         except ResponderError:
             raise
         except Exception as exc:
@@ -631,11 +849,17 @@ def build_agent_graph(
             "final_ans": answer,
         }
 
-    async def retrieval_node(state: AgentState) -> dict[str, Any]:
+    async def retrieval_node(
+        state: AgentState,
+        config: Optional[RunnableConfig] = None,
+    ) -> dict[str, Any]:
         current_msg = state.get("current_msg", "")
         conversation = list(state.get("conversation") or [])
         if retriever is None:
             raise RetrievalConfigError("retrieval service is not configured")
+        writer = _stream_writer(config)
+        if writer is not None:
+            writer({"event": "status", "data": {"stage": "retrieving"}})
         try:
             rewritten = rewrite(current_msg, conversation)
             if inspect.isawaitable(rewritten):
@@ -650,6 +874,7 @@ def build_agent_graph(
             raise RetrievalError(f"retrieval failed: {exc}") from exc
 
         context = format_retrieved_context(chunks)
+        sources = build_sources(chunks)
         messages: list[BaseMessage] = [
             HumanMessage(content=current_msg),
             ToolMessage(
@@ -657,10 +882,12 @@ def build_agent_graph(
                 tool_call_id="retrieval",
             ),
         ]
+        if writer is not None:
+            writer({"event": "sources", "data": sources})
         return {
             "retrieval_query": query,
             "retrieved_context": context,
-            "sources": build_sources(chunks),
+            "sources": sources,
             "conversation": messages,
             "status": "retrieved",
         }
@@ -732,6 +959,11 @@ class AgentRuntime:
                 self.conversational_llm or LLMResponder()
             )
             conversationalist = self.conversational_llm.respond
+        self.conversational_streamer = (
+            self.conversational_llm.respond_stream
+            if self.conversational_llm is not None
+            else None
+        )
 
         self._owns_retrieval = retriever is None and retrieval_service is None
         if retriever is None:
@@ -749,6 +981,7 @@ class AgentRuntime:
             self.rewriter,
             retriever,
             guardrail,
+            self.conversational_streamer,
         )
         self._conversations: dict[str, list[BaseMessage]] = {}
         self._conversation_locks: dict[str, asyncio.Lock] = {}
@@ -778,6 +1011,52 @@ class AgentRuntime:
         }
         return await self.graph.ainvoke(state)
 
+    async def _invoke_stream(
+        self,
+        user_prompt: str,
+        conversation: History | None,
+        conversation_id: str | None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        state: AgentState = {
+            "current_msg": user_prompt,
+            "conversation": convert_to_messages(conversation or []),
+            "plan": {},
+            "status": "planning",
+            "final_ans": "",
+            "guardrail": {},
+            "retrieval_query": "",
+            "retrieved_context": "",
+            "sources": [],
+        }
+        final_state: AgentState | None = None
+        async for mode, chunk in self.graph.astream(
+            state,
+            stream_mode=["values", "custom"],
+            config={"configurable": {"stream": True}},
+        ):
+            if mode == "custom":
+                yield chunk
+            elif mode == "values":
+                final_state = chunk
+
+        if final_state is None:
+            raise ResponderError("agent stream finished without a final state")
+        if conversation_id is not None:
+            self._conversations[conversation_id] = list(
+                final_state.get("conversation") or []
+            )
+        route = final_state.get("plan", {}).get("type")
+        if route not in ("conversational", "retrieval", "blocked"):
+            raise PlannerError("planner did not return a valid route")
+        yield {
+            "event": "done",
+            "data": {
+                "type": route,
+                "answer": final_state.get("final_ans") or None,
+                "sources": final_state.get("sources") or [],
+            },
+        }
+
     async def run(
         self,
         user_prompt: str,
@@ -799,6 +1078,35 @@ class AgentRuntime:
                 result.get("conversation") or []
             )
             return result
+
+    async def run_stream(
+        self,
+        user_prompt: str,
+        conversation: History | None = None,
+        *,
+        conversation_id: str | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        conversation_id = (conversation_id or "").strip() or None
+        if conversation_id is None:
+            async for item in self._invoke_stream(
+                user_prompt,
+                conversation,
+                None,
+            ):
+                yield item
+            return
+
+        async with self._conversation_lock(conversation_id):
+            if conversation is None:
+                history = list(self._conversations.get(conversation_id, []))
+            else:
+                history = conversation
+            async for item in self._invoke_stream(
+                user_prompt,
+                history,
+                conversation_id,
+            ):
+                yield item
 
     async def close(self) -> None:
         if self._owns_guardrail and self.input_guardrail is not None:
@@ -835,6 +1143,23 @@ async def run_agent(
         conversation,
         conversation_id=conversation_id,
     )
+
+
+async def stream_agent(
+    user_prompt: str,
+    conversation: History | None = None,
+    *,
+    conversation_id: str | None = None,
+) -> AsyncIterator[dict[str, Any]]:
+    prompt = user_prompt.strip()
+    if not prompt:
+        raise ValueError("user prompt cannot be empty")
+    async for item in get_agent_runtime().run_stream(
+        prompt,
+        conversation,
+        conversation_id=conversation_id,
+    ):
+        yield item
 
 
 async def close_agent_runtime() -> None:

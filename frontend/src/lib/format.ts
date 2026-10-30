@@ -7,17 +7,17 @@ export const ROUTE_META: Record<
   retrieval: {
     label: "Grounded",
     description: "Answered from indexed filing passages",
-    tone: "border-emerald-300/25 bg-emerald-300/10 text-emerald-200",
+    tone: "border-lemon/25 bg-lemon/10 text-lemon",
   },
   conversational: {
     label: "Direct",
     description: "Answered without filing retrieval",
-    tone: "border-sky-300/25 bg-sky-300/10 text-sky-200",
+    tone: "border-hairline bg-surface-soft text-muted",
   },
   blocked: {
     label: "Guardrail",
     description: "Stopped by the input guardrail",
-    tone: "border-amber-300/25 bg-amber-300/10 text-amber-200",
+    tone: "border-warn/25 bg-warn/10 text-warn",
   },
 };
 

@@ -4,8 +4,8 @@ import { useEffect } from "react";
 
 import {
   ArrowUpRightIcon,
-  FileTextIcon,
-  LayersIcon,
+  DocumentIcon,
+  LinkIcon,
   XIcon,
 } from "@/components/icons";
 import {
@@ -16,16 +16,27 @@ import {
 } from "@/lib/format";
 import type { Source } from "@/lib/types";
 
-function SourceLabel({ source }: { source: Source }) {
-  const label = sourceLocation([source.ticker, source.form_type, source.year]);
+function CitationChip({ citation }: { citation: number }) {
   return (
-    <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-stone-500">
-      {label || "SEC filing"}
+    <span className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-md border border-lemon/25 bg-lemon/10 px-1.5 font-mono text-[10px] font-medium text-lemon">
+      {citation}
     </span>
   );
 }
 
-export function SourceCard({
+function filingMeta(source: Source): string {
+  return sourceLocation([source.ticker, source.form_type, source.year]);
+}
+
+function sectionLabel(source: Source): string {
+  return sourceLocation([
+    source.section.join(" · "),
+    source.part,
+    source.item_title,
+  ]);
+}
+
+export function SourceRow({
   source,
   onOpen,
 }: {
@@ -33,84 +44,31 @@ export function SourceCard({
   onOpen: (source: Source) => void;
 }) {
   const relevance = relevancePercent(source.relevance_score);
-  const section = source.section?.filter(Boolean) ?? [];
-  const heading = source.item_title
-    ? `Item ${source.item_id ?? "?"} — ${source.item_title}`
-    : section[0];
+  const meta = filingMeta(source);
 
   return (
     <button
       type="button"
       onClick={() => onOpen(source)}
-      className="group flex w-full flex-col gap-2 rounded-xl border border-white/[0.07] bg-white/[0.025] p-3.5 text-left transition hover:border-emerald-300/25 hover:bg-emerald-300/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/40"
+      className="group flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left transition hover:bg-surface-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lemon/30"
     >
-      <div className="flex items-center justify-between gap-2">
-        <span className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-black/20 px-1.5 py-0.5 font-mono text-[10px] text-emerald-200/90">
-          [{source.citation}]
+      <CitationChip citation={source.citation} />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[12.5px] font-medium leading-5 text-body transition group-hover:text-ink">
+          {source.item_title || source.title}
         </span>
-        <SourceLabel source={source} />
-      </div>
-
-      <p className="line-clamp-2 text-[13px] font-medium leading-5 text-stone-200">
-        {source.title || "SEC filing source"}
-      </p>
-
-      {heading || section.length > 0 ? (
-        <p className="line-clamp-1 font-mono text-[10.5px] leading-4 text-stone-500">
-          {[source.part, heading, ...section.slice(1)]
-            .filter(Boolean)
-            .join(" / ")}
-        </p>
-      ) : null}
-
-      {source.snippet ? (
-        <p className="line-clamp-2 text-[12px] leading-5 text-stone-400">
-          {source.snippet}
-        </p>
-      ) : null}
-
-      <div className="mt-auto flex items-center justify-between gap-3 pt-0.5">
-        <span className="truncate text-[10px] text-stone-600">
-          {hostOf(source.url)}
-        </span>
-        <span className="flex items-center gap-2">
+        <span className="flex items-center gap-1.5 truncate font-mono text-[9px] uppercase tracking-[0.1em] text-muted-soft">
+          <span className="truncate">{meta || "SEC filing"}</span>
           {relevance !== null ? (
-            <span className="flex items-center gap-1.5">
-              <span className="h-1 w-10 overflow-hidden rounded-full bg-white/10">
-                <span
-                  className="block h-full rounded-full bg-emerald-300/70"
-                  style={{ width: `${relevance}%` }}
-                />
-              </span>
-              <span className="font-mono text-[9.5px] text-stone-500">
-                {relevance}%
-              </span>
-            </span>
+            <>
+              <span className="h-2.5 w-px shrink-0 bg-hairline" />
+              <span className="shrink-0">{relevance}% match</span>
+            </>
           ) : null}
-          <ArrowUpRightIcon className="h-3.5 w-3.5 text-stone-600 transition group-hover:text-emerald-200" />
         </span>
-      </div>
+      </span>
+      <ArrowUpRightIcon className="h-3.5 w-3.5 shrink-0 text-muted-soft transition group-hover:text-lemon" />
     </button>
-  );
-}
-
-function MetaRow({
-  label,
-  value,
-}: {
-  label: string;
-  value: string | number | null | undefined;
-}) {
-  if (value === null || value === undefined || value === "") return null;
-  return (
-    <div className="flex flex-col gap-0.5 border-b border-white/5 py-2">
-      <dt className="text-[10px] uppercase tracking-[0.14em] text-stone-600">
-        {label}
-      </dt>
-      <dd className="break-words font-mono text-[11.5px] leading-5 text-stone-300">
-        {value}
-      </dd>
-    </div>
   );
 }
 
@@ -118,134 +76,144 @@ export function SourceSheet({
   source,
   onClose,
 }: {
-  source: Source | null;
+  source: Source;
   onClose: () => void;
 }) {
   useEffect(() => {
-    if (!source) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
     document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [source, onClose]);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [onClose]);
 
-  if (!source) return null;
-
+  const section = sectionLabel(source);
   const relevance = relevancePercent(source.relevance_score);
-  const section = source.section?.filter(Boolean) ?? [];
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <button
         type="button"
-        aria-label="Close source details"
+        aria-label="Close source panel"
         onClick={onClose}
-        className="absolute inset-0 bg-black/60 backdrop-blur-[2px]"
+        className="absolute inset-0 bg-black/75 backdrop-blur-[3px]"
       />
       <aside
         role="dialog"
         aria-modal="true"
         aria-label={`Source ${source.citation}`}
-        className="relative flex h-full w-full max-w-md flex-col border-l border-white/10 bg-[#0b1017] shadow-[-24px_0_80px_rgba(0,0,0,0.55)]"
+        className="relative flex h-full w-full max-w-xl flex-col overflow-hidden border-l border-hairline bg-surface shadow-float"
       >
-        <header className="flex items-start justify-between gap-4 border-b border-white/10 px-6 py-5">
+        <div className="flex items-start justify-between gap-4 border-b border-hairline px-6 py-5">
           <div className="min-w-0">
-            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-emerald-200/80">
-              Citation [{source.citation}]
-            </p>
-            <h2 className="mt-1.5 line-clamp-2 font-serif text-2xl leading-snug text-stone-100">
-              {source.title || "SEC filing source"}
+            <div className="flex items-center gap-2">
+              <CitationChip citation={source.citation} />
+              <p className="font-mono text-[9.5px] uppercase tracking-[0.2em] text-muted-soft">
+                Cited passage
+              </p>
+            </div>
+            <h2 className="mt-3 font-serif text-[24px] leading-tight text-ink">
+              {source.item_title || source.title}
             </h2>
-            <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-white/10 px-2 py-0.5 font-mono text-[9.5px] uppercase tracking-[0.14em] text-stone-500">
-              <LayersIcon className="h-3 w-3" />
-              {LINK_TYPE_LABEL[source.link_type] ?? source.link_type}
-            </p>
+            <div className="mt-2.5 flex flex-wrap gap-1.5">
+              {[source.ticker, source.form_type, source.year, source.part]
+                .filter(Boolean)
+                .map((value, index) => (
+                  <span
+                    key={`${value}-${index}`}
+                    className="rounded-md border border-hairline px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.1em] text-muted"
+                  >
+                    {value}
+                  </span>
+                ))}
+              {relevance !== null ? (
+                <span className="rounded-md border border-lemon/25 bg-lemon/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.1em] text-lemon">
+                  {relevance}% match
+                </span>
+              ) : null}
+            </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            autoFocus
-            className="rounded-lg border border-white/10 p-2 text-stone-400 transition hover:border-white/20 hover:text-stone-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/40"
-            aria-label="Close source details"
+            aria-label="Close source panel"
+            className="rounded-lg border border-hairline p-2 text-muted transition hover:border-lemon/30 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lemon/40"
           >
             <XIcon className="h-4 w-4" />
           </button>
-        </header>
-
-        <div className="flex-1 overflow-y-auto px-6 py-5">
-          {source.snippet ? (
-            <section className="mb-5 rounded-xl border border-white/[0.07] bg-white/[0.03] p-4">
-              <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-600">
-                Retrieved passage
-              </p>
-              <p className="whitespace-pre-wrap text-[13px] leading-6 text-stone-300">
-                {source.snippet}
-              </p>
-            </section>
-          ) : null}
-
-          <section>
-            <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.16em] text-stone-600">
-              Filing context
-            </p>
-            <dl className="grid grid-cols-2 gap-x-5">
-              <MetaRow label="Company / ticker" value={source.ticker} />
-              <MetaRow label="Form" value={source.form_type} />
-              <MetaRow label="Fiscal year" value={source.year} />
-              <MetaRow label="CIK" value={source.cik} />
-              <MetaRow label="Part" value={source.part} />
-              <MetaRow
-                label="Item"
-                value={
-                  source.item_title
-                    ? `${source.item_id ?? "?"} — ${source.item_title}`
-                    : source.item_id
-                }
-              />
-              <MetaRow
-                label="Section path"
-                value={section.length ? section.join(" / ") : undefined}
-              />
-              <MetaRow label="Accession" value={source.accession_number} />
-              <MetaRow label="Document ID" value={source.document_id} />
-              <MetaRow label="Anchor" value={source.anchor_id} />
-              <MetaRow label="DOM ID" value={source.source_dom_id} />
-              <MetaRow label="Point ID" value={source.point_id} />
-              <MetaRow
-                label="Relevance"
-                value={relevance !== null ? `${relevance}%` : undefined}
-              />
-            </dl>
-          </section>
         </div>
 
-        <footer className="space-y-2 border-t border-white/10 bg-black/20 px-6 py-5">
-          <a
-            href={source.url}
-            target="_blank"
-            rel="noreferrer"
-            className="flex h-11 items-center justify-center gap-2 rounded-xl bg-emerald-300 text-[13px] font-semibold text-[#05100c] transition hover:bg-emerald-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-200/60"
-          >
-            <FileTextIcon className="h-4 w-4" />
-            Open cited passage
-            <ArrowUpRightIcon className="h-3.5 w-3.5" />
-          </a>
-          {source.document_url && source.document_url !== source.url ? (
+        <div className="flex-1 overflow-y-auto px-6 py-6">
+          {section ? (
+            <div className="mb-5">
+              <p className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.18em] text-muted-soft">
+                Filing location
+              </p>
+              <p className="text-[11.5px] leading-5 text-body">{section}</p>
+            </div>
+          ) : null}
+
+          <div className="border-l-2 border-lemon/40 pl-4">
+            <p className="whitespace-pre-wrap text-[14px] leading-7 text-body">
+              {source.snippet ||
+                "No passage text was returned for this citation. Open the original filing to inspect the source location."}
+            </p>
+          </div>
+
+          <div className="mt-6 space-y-2 border-t border-hairline pt-5">
+            <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-muted-soft">
+              Original record
+            </p>
             <a
-              href={source.document_url}
+              href={source.url}
               target="_blank"
               rel="noreferrer"
-              className="flex h-10 items-center justify-center gap-2 rounded-xl border border-white/10 text-[12px] font-medium text-stone-300 transition hover:border-white/20 hover:text-stone-100"
+              className="flex items-center gap-2.5 rounded-lg border border-hairline bg-surface-soft px-3 py-2.5 transition hover:border-lemon/30"
             >
-              Open full filing
-              <ArrowUpRightIcon className="h-3.5 w-3.5" />
+              <LinkIcon className="h-3.5 w-3.5 shrink-0 text-lemon" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[12px] font-medium text-body">
+                  Open cited location
+                </span>
+                <span className="block truncate font-mono text-[9.5px] text-muted-soft">
+                  {hostOf(source.url)}
+                </span>
+              </span>
+              <ArrowUpRightIcon className="h-3.5 w-3.5 shrink-0 text-muted-soft" />
             </a>
-          ) : null}
-          <p className="truncate pt-1 text-center font-mono text-[9px] text-stone-600">
-            {hostOf(source.url)}
+            {source.document_url && source.document_url !== source.url ? (
+              <a
+                href={source.document_url}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-2.5 rounded-lg border border-hairline bg-surface-soft px-3 py-2.5 transition hover:border-lemon/30"
+              >
+                <DocumentIcon className="h-3.5 w-3.5 shrink-0 text-muted" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[12px] font-medium text-body">
+                    Full filing document
+                  </span>
+                  <span className="block truncate font-mono text-[9.5px] text-muted-soft">
+                    {hostOf(source.document_url)}
+                  </span>
+                </span>
+                <ArrowUpRightIcon className="h-3.5 w-3.5 shrink-0 text-muted-soft" />
+              </a>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="border-t border-hairline bg-canvas/40 px-6 py-3.5">
+          <p className="text-[10.5px] leading-4 text-muted-soft">
+            {LINK_TYPE_LABEL[source.link_type]} citation · Always verify figures
+            against the original filing.
           </p>
-        </footer>
+        </div>
       </aside>
     </div>
   );

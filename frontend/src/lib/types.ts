@@ -48,6 +48,7 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   status?: MessageStatus;
+  stage?: string;
   route?: RouteType;
   sources?: Source[];
   error?: string;
