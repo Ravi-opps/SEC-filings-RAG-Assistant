@@ -112,14 +112,6 @@ class QueryResponse(BaseModel):
     sources: list[SourceInfo] = Field(default_factory=list)
 
 
-def mask(value: str) -> str:
-    if not value:
-        return ""
-    if len(value) <= 8:
-        return "*" * len(value)
-    return f"{value[:4]}...{value[-4:]}"
-
-
 def reload_env() -> dict[str, str]:
     global _loaded_keys
     raw = dotenv_values(ENV_PATH) if ENV_PATH.exists() else {}
@@ -237,7 +229,6 @@ def health():
         key: {
             "loaded": key in os.environ,
             "has_value": bool(value),
-            "preview": mask(value),
         }
         for key, value in values.items()
     }

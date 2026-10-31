@@ -296,9 +296,18 @@ export function Sidebar({
             <button
               type="button"
               onClick={onRecheck}
-              className="flex w-full items-center gap-2 text-left"
-              title="Check backend connection"
+              aria-describedby="backend-contact-hint"
+              className="group relative flex w-full items-center gap-2 text-left"
             >
+              <span
+                id="backend-contact-hint"
+                role="tooltip"
+                className="pointer-events-none absolute bottom-full left-0 z-20 mb-2 w-max max-w-[230px] rounded-lg border border-hairline bg-surface-elevated px-2.5 py-2 text-left text-[10.5px] leading-4 text-body opacity-0 shadow-lift transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
+              >
+                Contact{" "}
+                <span className="font-mono text-lemon">9014805921</span> to get
+                it online
+              </span>
               <span className="relative flex h-2 w-2">
                 {backendStatus === "online" ? (
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-lemon/50" />
@@ -376,8 +385,8 @@ export function Sidebar({
             type="button"
             onClick={onRecheck}
             className="flex h-8 w-8 items-center justify-center rounded-lg transition hover:bg-surface-soft"
-            aria-label={status.label}
-            title={`${status.label} — ${status.detail}`}
+            aria-label={`${status.label}. Contact 9014805921 to get it online.`}
+            title={`${status.label} — Contact 9014805921 to get it online`}
           >
             <span className="relative flex h-2 w-2">
               {backendStatus === "online" ? (
