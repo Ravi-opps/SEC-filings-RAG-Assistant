@@ -27,6 +27,7 @@ export default function Home() {
   const store = useChatStore();
   const { status: backendStatus, recheck } = useBackendStatus();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [ingestOpen, setIngestOpen] = useState(false);
   const [sourceSheet, setSourceSheet] = useState<Source | null>(null);
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
@@ -150,6 +151,10 @@ export default function Home() {
     setSourceSheet(null);
   }, [active, createConversation]);
 
+  const toggleSidebarCollapsed = useCallback(() => {
+    setSidebarCollapsed((current) => !current);
+  }, []);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
@@ -180,9 +185,11 @@ export default function Home() {
         conversations={store.conversations}
         activeId={activeId}
         open={sidebarOpen}
+        collapsed={sidebarCollapsed}
         backendStatus={backendStatus}
         user={auth.user}
         onClose={() => setSidebarOpen(false)}
+        onToggleCollapsed={toggleSidebarCollapsed}
         onSelect={(id) => {
           setActiveId(id);
           setSourceSheet(null);

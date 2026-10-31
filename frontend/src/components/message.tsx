@@ -2,13 +2,13 @@
 
 import { useState } from "react";
 
+import { BrandMark } from "@/components/brand-mark";
 import {
   AlertIcon,
   CheckIcon,
   ChevronRightIcon,
   CopyIcon,
   LayersIcon,
-  SpikeMark,
 } from "@/components/icons";
 import { Markdown } from "@/components/markdown";
 import { SourceRow } from "@/components/source-card";
@@ -119,19 +119,13 @@ export function Message({
 
   return (
     <div className="group/message flex gap-3.5 sm:gap-4">
-      <div
-        className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${
-          isBlocked
-            ? "border-warn/20 bg-warn/[0.08] text-warn"
-            : "border-hairline bg-surface-card text-lemon"
-        }`}
-      >
-        {isBlocked ? (
+      {isBlocked ? (
+        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-warn/20 bg-warn/[0.08] text-warn">
           <AlertIcon className="h-4 w-4" />
-        ) : (
-          <SpikeMark className="h-3.5 w-3.5" />
-        )}
-      </div>
+        </div>
+      ) : (
+        <BrandMark size="sm" className="mt-0.5" />
+      )}
 
       <div className="min-w-0 flex-1">
         <div className="mb-2 flex min-h-5 flex-wrap items-center gap-2">

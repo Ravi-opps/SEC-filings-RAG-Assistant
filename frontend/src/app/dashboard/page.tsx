@@ -4,12 +4,12 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { AuthLoading, AuthScreen } from "@/components/auth-screen";
+import { BrandMark } from "@/components/brand-mark";
 import {
   AlertIcon,
   ArrowLeftIcon,
   LayersIcon,
   RefreshIcon,
-  SpikeMark,
 } from "@/components/icons";
 import { fetchIngestStatus } from "@/lib/api";
 import type {
@@ -319,9 +319,7 @@ export default function DashboardPage() {
             <ArrowLeftIcon className="h-4 w-4" />
           </Link>
 
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-lemon/25 bg-lemon/[0.08] text-lemon">
-            <SpikeMark className="h-4 w-4" />
-          </div>
+          <BrandMark />
           <div className="min-w-0">
             <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-soft">
               Filing Room / pipeline

@@ -192,11 +192,26 @@ export function LinkIcon(props: IconProps) {
   );
 }
 
-export function SpikeMark(props: IconProps) {
+export function ChevronsLeftIcon(props: IconProps) {
   return (
-    <Icon strokeWidth={2} {...props}>
-      <path d="M12 2.5v19M2.5 12h19" />
-      <path d="M5.3 5.3l13.4 13.4M18.7 5.3L5.3 18.7" />
+    <Icon {...props}>
+      <path d="M11 6l-6 6 6 6M18 6l-6 6 6 6" />
+    </Icon>
+  );
+}
+
+export function ChevronsRightIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M13 6l6 6-6 6M6 6l6 6-6 6" />
+    </Icon>
+  );
+}
+
+export function FilingMark(props: IconProps) {
+  return (
+    <Icon strokeWidth={1.4} {...props}>
+      <path d="M9 19V5h7M9 12h5.5" />
     </Icon>
   );
 }

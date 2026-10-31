@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 
-import { AlertIcon, SpikeMark } from "@/components/icons";
+import { BrandMark } from "@/components/brand-mark";
+import { AlertIcon } from "@/components/icons";
 import type { AuthUser } from "@/lib/types";
 
 type Mode = "login" | "signup";
@@ -11,13 +12,7 @@ function BrandLockup({ size = "md" }: { size?: "md" | "lg" }) {
   const large = size === "lg";
   return (
     <div className="flex items-center gap-3">
-      <div
-        className={`flex shrink-0 items-center justify-center rounded-lg border border-lemon/25 bg-lemon/[0.08] text-lemon ${
-          large ? "h-10 w-10" : "h-9 w-9"
-        }`}
-      >
-        <SpikeMark className={large ? "h-4.5 w-4.5" : "h-4 w-4"} />
-      </div>
+      <BrandMark size={large ? "lg" : "md"} />
       <div>
         <p
           className={`font-serif leading-none text-ink ${
