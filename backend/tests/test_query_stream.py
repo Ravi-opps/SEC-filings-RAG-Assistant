@@ -6,9 +6,16 @@ from retrieval_agent import PlannerConfigError
 def test_query_stream_emits_sse_frames(monkeypatch, auth_headers):
     calls = {}
 
-    async def fake_stream(prompt, conversation=None, *, conversation_id=None):
+    async def fake_stream(
+        prompt,
+        conversation=None,
+        *,
+        conversation_id=None,
+        memory_context="",
+    ):
         calls["prompt"] = prompt
         calls["conversation_id"] = conversation_id
+        calls["memory_context"] = memory_context
         yield {"event": "status", "data": {"stage": "retrieving"}}
         yield {"event": "sources", "data": [{"citation": 1}]}
         yield {"event": "delta", "data": {"text": "hi"}}
@@ -29,7 +36,11 @@ def test_query_stream_emits_sse_frames(monkeypatch, auth_headers):
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/event-stream")
     assert response.headers["cache-control"] == "no-cache, no-transform"
-    assert calls == {"prompt": "hello", "conversation_id": "conv-1"}
+    assert calls == {
+        "prompt": "hello",
+        "conversation_id": "1:conv-1",
+        "memory_context": "",
+    }
 
     body = response.text
     assert 'event: status\ndata: {"stage": "accepted"}\n\n' in body
@@ -42,7 +53,13 @@ def test_query_stream_emits_sse_frames(monkeypatch, auth_headers):
 
 
 def test_query_stream_reports_config_errors_as_events(monkeypatch, auth_headers):
-    async def fake_stream(prompt, conversation=None, *, conversation_id=None):
+    async def fake_stream(
+        prompt,
+        conversation=None,
+        *,
+        conversation_id=None,
+        memory_context="",
+    ):
         raise PlannerConfigError("CLASSIFIER_URL is not configured")
         yield  # pragma: no cover
 

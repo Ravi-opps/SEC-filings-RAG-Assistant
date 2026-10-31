@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -26,6 +27,12 @@ from filing_resolver import (
 )
 from input_guardrail import GuardrailConfigError, GuardrailError
 from job_queue import QueueUnavailableError, close_producer, publish_filing_job
+from memory_service import (
+    MemoryService,
+    format_memory_context,
+    memory_enabled,
+    memory_user_id,
+)
 from qdrant_load_status import document_reports
 from qdrant_store import QdrantStore
 from retrieval_agent import (
@@ -63,6 +70,7 @@ async def lifespan(_: FastAPI):
         await close_producer()
     finally:
         await close_agent_runtime()
+        close_memory_service()
 
 
 app = FastAPI(title="RAG Backend", lifespan=lifespan)
@@ -126,6 +134,75 @@ def reload_env() -> dict[str, str]:
 
 
 reload_env()
+
+_memory_service: MemoryService | None = None
+_memory_key: str | None = None
+
+
+def get_memory_service() -> MemoryService | None:
+    global _memory_key, _memory_service
+    if not memory_enabled():
+        close_memory_service()
+        return None
+    key = (os.getenv("MEM0_KEY") or "").strip()
+    if not key:
+        return None
+    if _memory_service is None or _memory_key != key:
+        if _memory_service is not None:
+            _memory_service.close()
+        _memory_service = MemoryService(api_key=key)
+        _memory_key = key
+    return _memory_service
+
+
+def close_memory_service() -> None:
+    global _memory_key, _memory_service
+    if _memory_service is not None:
+        _memory_service.close()
+    _memory_service = None
+    _memory_key = None
+
+
+async def load_memory_context(user: CurrentUser, prompt: str) -> str:
+    service = get_memory_service()
+    if service is None:
+        return ""
+    try:
+        memories = await asyncio.to_thread(
+            service.search,
+            memory_user_id(user.id),
+            prompt,
+        )
+    except Exception:
+        LOGGER.exception("user memory search failed")
+        return ""
+    return format_memory_context(memories)
+
+
+async def save_memory_turn(
+    user: CurrentUser,
+    prompt: str,
+    answer: str,
+    conversation_id: str,
+) -> None:
+    service = get_memory_service()
+    if service is None:
+        return
+    try:
+        await asyncio.to_thread(
+            service.add_turn,
+            memory_user_id(user.id),
+            prompt,
+            answer,
+            conversation_id,
+        )
+    except Exception:
+        LOGGER.exception("user memory save failed")
+
+
+def scoped_conversation_id(user: CurrentUser, conversation_id: str) -> str:
+    return f"{user.id}:{conversation_id}"
+
 
 _cache: RedisCache | None = None
 _cache_url: str | None = None
@@ -377,9 +454,14 @@ async def query(
     if not prompt:
         raise HTTPException(status_code=422, detail="user prompt cannot be empty")
     conversation_id = (conversation_id or "default").strip()[:128] or "default"
+    memory_context = await load_memory_context(_user, prompt)
 
     try:
-        state = await run_agent(prompt, conversation_id=conversation_id)
+        state = await run_agent(
+            prompt,
+            conversation_id=scoped_conversation_id(_user, conversation_id),
+            memory_context=memory_context,
+        )
     except (PlannerConfigError, RetrievalConfigError, GuardrailConfigError) as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except (
@@ -397,6 +479,8 @@ async def query(
             detail="planner did not return a valid route",
         )
     answer = state.get("final_ans") or None
+    if answer and route != "blocked":
+        await save_memory_turn(_user, prompt, answer, conversation_id)
     sources = [
         SourceInfo.model_validate(source)
         for source in state.get("sources") or []
@@ -423,16 +507,25 @@ async def query_stream(
     if not prompt:
         raise HTTPException(status_code=422, detail="user prompt cannot be empty")
     conversation_id = (conversation_id or "default").strip()[:128] or "default"
+    agent_conversation_id = scoped_conversation_id(_user, conversation_id)
 
     async def events():
         yield _sse("status", {"stage": "accepted"})
+        final_answer: str | None = None
+        final_route: str | None = None
         try:
+            memory_context = await load_memory_context(_user, prompt)
             async for item in stream_agent(
                 prompt,
-                conversation_id=conversation_id,
+                conversation_id=agent_conversation_id,
+                memory_context=memory_context,
             ):
                 event = str(item.get("event") or "message")
-                yield _sse(event, item.get("data"))
+                data = item.get("data")
+                if event == "done" and isinstance(data, dict):
+                    final_answer = data.get("answer")
+                    final_route = data.get("type")
+                yield _sse(event, data)
         except (
             PlannerConfigError,
             RetrievalConfigError,
@@ -451,6 +544,13 @@ async def query_stream(
             yield _sse(
                 "error",
                 {"detail": "The retrieval request failed.", "status": 500},
+            )
+        if final_answer and final_route != "blocked":
+            await save_memory_turn(
+                _user,
+                prompt,
+                final_answer,
+                conversation_id,
             )
 
     return StreamingResponse(

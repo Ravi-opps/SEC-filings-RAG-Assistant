@@ -22,6 +22,7 @@ from langchain_core.messages import (
     AIMessage,
     BaseMessage,
     HumanMessage,
+    SystemMessage,
     ToolMessage,
     convert_to_messages,
 )
@@ -59,6 +60,7 @@ class PlannerDecision(BaseModel):
 class AgentState(TypedDict):
     current_msg: str
     conversation: Annotated[list[BaseMessage], add_messages]
+    memory_context: str
     plan: dict[str, Any]
     status: str
     final_ans: str
@@ -81,6 +83,18 @@ class ResponderError(Exception):
 
 
 History = list[BaseMessage] | list[dict[str, Any]]
+
+
+def with_memory_context(
+    conversation: History | None,
+    memory_context: str | None,
+) -> list[BaseMessage]:
+    messages = convert_to_messages(conversation or [])
+    context = (memory_context or "").strip()
+    if not context:
+        return messages
+    return [SystemMessage(content=context), *messages]
+
 
 PlannerFn = Callable[
     [str, History],
@@ -746,7 +760,10 @@ def build_agent_graph(
         try:
             result = guard(
                 state.get("current_msg", ""),
-                list(state.get("conversation") or []),
+                with_memory_context(
+                    state.get("conversation"),
+                    state.get("memory_context"),
+                ),
             )
             if inspect.isawaitable(result):
                 result = await result
@@ -782,7 +799,10 @@ def build_agent_graph(
         try:
             result = planner(
                 state.get("current_msg", ""),
-                list(state.get("conversation") or []),
+                with_memory_context(
+                    state.get("conversation"),
+                    state.get("memory_context"),
+                ),
             )
             if inspect.isawaitable(result):
                 result = await result
@@ -800,7 +820,10 @@ def build_agent_graph(
         state: AgentState,
         config: Optional[RunnableConfig] = None,
     ) -> dict[str, Any]:
-        history = list(state.get("conversation") or [])
+        history = with_memory_context(
+            state.get("conversation"),
+            state.get("memory_context"),
+        )
         retrieved = state.get("status") == "retrieved"
         if retrieved:
             history = history[:-2]
@@ -854,7 +877,10 @@ def build_agent_graph(
         config: Optional[RunnableConfig] = None,
     ) -> dict[str, Any]:
         current_msg = state.get("current_msg", "")
-        conversation = list(state.get("conversation") or [])
+        conversation = with_memory_context(
+            state.get("conversation"),
+            state.get("memory_context"),
+        )
         if retriever is None:
             raise RetrievalConfigError("retrieval service is not configured")
         writer = _stream_writer(config)
@@ -997,10 +1023,12 @@ class AgentRuntime:
         self,
         user_prompt: str,
         conversation: History | None,
+        memory_context: str = "",
     ) -> AgentState:
         state: AgentState = {
             "current_msg": user_prompt,
             "conversation": convert_to_messages(conversation or []),
+            "memory_context": memory_context,
             "plan": {},
             "status": "planning",
             "final_ans": "",
@@ -1016,10 +1044,12 @@ class AgentRuntime:
         user_prompt: str,
         conversation: History | None,
         conversation_id: str | None,
+        memory_context: str = "",
     ) -> AsyncIterator[dict[str, Any]]:
         state: AgentState = {
             "current_msg": user_prompt,
             "conversation": convert_to_messages(conversation or []),
+            "memory_context": memory_context,
             "plan": {},
             "status": "planning",
             "final_ans": "",
@@ -1063,17 +1093,22 @@ class AgentRuntime:
         conversation: History | None = None,
         *,
         conversation_id: str | None = None,
+        memory_context: str = "",
     ) -> AgentState:
         conversation_id = (conversation_id or "").strip() or None
         if conversation_id is None:
-            return await self._invoke(user_prompt, conversation)
+            return await self._invoke(user_prompt, conversation, memory_context)
 
         async with self._conversation_lock(conversation_id):
             if conversation is None:
                 history = list(self._conversations.get(conversation_id, []))
             else:
                 history = conversation
-            result = await self._invoke(user_prompt, history)
+            result = await self._invoke(
+                user_prompt,
+                history,
+                memory_context,
+            )
             self._conversations[conversation_id] = list(
                 result.get("conversation") or []
             )
@@ -1085,6 +1120,7 @@ class AgentRuntime:
         conversation: History | None = None,
         *,
         conversation_id: str | None = None,
+        memory_context: str = "",
     ) -> AsyncIterator[dict[str, Any]]:
         conversation_id = (conversation_id or "").strip() or None
         if conversation_id is None:
@@ -1092,6 +1128,7 @@ class AgentRuntime:
                 user_prompt,
                 conversation,
                 None,
+                memory_context,
             ):
                 yield item
             return
@@ -1105,6 +1142,7 @@ class AgentRuntime:
                 user_prompt,
                 history,
                 conversation_id,
+                memory_context,
             ):
                 yield item
 
@@ -1134,6 +1172,7 @@ async def run_agent(
     conversation: History | None = None,
     *,
     conversation_id: str | None = None,
+    memory_context: str = "",
 ) -> AgentState:
     prompt = user_prompt.strip()
     if not prompt:
@@ -1142,6 +1181,7 @@ async def run_agent(
         prompt,
         conversation,
         conversation_id=conversation_id,
+        memory_context=memory_context,
     )
 
 
@@ -1150,6 +1190,7 @@ async def stream_agent(
     conversation: History | None = None,
     *,
     conversation_id: str | None = None,
+    memory_context: str = "",
 ) -> AsyncIterator[dict[str, Any]]:
     prompt = user_prompt.strip()
     if not prompt:
@@ -1158,6 +1199,7 @@ async def stream_agent(
         prompt,
         conversation,
         conversation_id=conversation_id,
+        memory_context=memory_context,
     ):
         yield item
 

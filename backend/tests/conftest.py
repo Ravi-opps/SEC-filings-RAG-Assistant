@@ -15,6 +15,13 @@ def block_live_network(monkeypatch):
     monkeypatch.setattr(requests.sessions.Session, "request", blocked)
 
 
+@pytest.fixture(autouse=True)
+def disable_memory(monkeypatch):
+    import main
+
+    monkeypatch.setattr(main, "get_memory_service", lambda: None)
+
+
 @pytest.fixture
 def auth_headers():
     import main
