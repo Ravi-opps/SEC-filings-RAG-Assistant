@@ -1,11 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { AuthLoading, AuthScreen } from "@/components/auth-screen";
 import { ChatView } from "@/components/chat-view";
 import { Composer } from "@/components/composer";
-import { DatabaseIcon, MenuIcon } from "@/components/icons";
+import { DatabaseIcon, LayersIcon, MenuIcon } from "@/components/icons";
 import { IngestDialog } from "@/components/ingest-dialog";
 import { Sidebar } from "@/components/sidebar";
 import { SourceSheet } from "@/components/source-card";
@@ -247,6 +248,13 @@ export default function Home() {
                     : "checking"}
               </span>
             </div>
+            <Link
+              href="/dashboard"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-hairline bg-surface-soft px-3 text-[11.5px] font-medium text-muted transition hover:border-lemon/30 hover:text-ink"
+            >
+              <LayersIcon className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Pipeline</span>
+            </Link>
             <button
               type="button"
               onClick={() => setIngestOpen(true)}

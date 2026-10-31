@@ -13,6 +13,12 @@ import type { BackendStatus } from "@/lib/use-backend-status";
 import type { IngestResponse } from "@/lib/types";
 
 const FORM_TYPES = ["10-K", "10-Q", "8-K"] as const;
+const MIN_REPORT_YEAR = 1994;
+const MAX_REPORT_YEAR = new Date().getFullYear();
+const REPORT_YEARS = Array.from(
+  { length: MAX_REPORT_YEAR - MIN_REPORT_YEAR + 1 },
+  (_, index) => MAX_REPORT_YEAR - index,
+);
 
 export function IngestDialog({
   open,
@@ -62,14 +68,16 @@ export function IngestDialog({
     }
 
     let reportYear: number | undefined;
-    if (year.trim()) {
+    if (year) {
       reportYear = Number(year);
       if (
         !Number.isInteger(reportYear) ||
-        reportYear < 1994 ||
-        reportYear > 2100
+        reportYear < MIN_REPORT_YEAR ||
+        reportYear > MAX_REPORT_YEAR
       ) {
-        setError("Report year must be between 1994 and 2100.");
+        setError(
+          `Report year must be between ${MIN_REPORT_YEAR} and ${MAX_REPORT_YEAR}.`,
+        );
         return;
       }
     }
@@ -119,9 +127,9 @@ export function IngestDialog({
               Index a filing
             </h2>
             <p className="mt-2 max-w-sm text-[12px] leading-5 text-muted">
-              Resolve a ticker and enqueue a filing. Workers download the
-              document, build structure-aware chunks, and embed them for
-              retrieval.
+              Choose a ticker, form, and report year to enqueue a filing.
+              Workers download the document, build structure-aware chunks, and
+              embed them for retrieval.
             </p>
           </div>
           <button
@@ -147,7 +155,7 @@ export function IngestDialog({
                 </div>
                 <div className="min-w-0">
                   <p className="text-[13.5px] font-medium text-ink">
-                    {result.cached ? "Already resolved" : "Queued for ingestion"}
+                    Queued for ingestion
                   </p>
                   <p className="mt-1 font-mono text-[11px] leading-5 text-body">
                     {result.ticker} · {result.company}
@@ -167,7 +175,7 @@ export function IngestDialog({
                   </div>
                   <p className="mt-3 text-[11.5px] leading-5 text-muted">
                     {result.cached
-                      ? "Redis already holds this company record, so no new job was published. Clear the cache key if you need to re-resolve and enqueue it."
+                      ? "The company lookup came from cache. A filing job for this form and year was still published to the queue."
                       : "The loader and chunk workers are processing it. Once they finish, ask a question about this company and the new passages will be retrievable."}
                   </p>
                 </div>
@@ -231,16 +239,19 @@ export function IngestDialog({
                   >
                     Report year
                   </label>
-                  <input
+                  <select
                     id="report-year"
                     value={year}
-                    onChange={(event) =>
-                      setYear(event.target.value.replace(/[^0-9]/g, ""))
-                    }
-                    inputMode="numeric"
-                    placeholder="Latest"
-                    className="h-10 w-full rounded-lg border border-hairline bg-surface-soft px-3 font-mono text-[12px] text-ink outline-none transition placeholder:text-muted-soft focus:border-lemon/40 focus:ring-2 focus:ring-lemon/10"
-                  />
+                    onChange={(event) => setYear(event.target.value)}
+                    className="h-10 w-full rounded-lg border border-hairline bg-surface-soft px-3 font-mono text-[12px] text-ink outline-none transition [color-scheme:dark] focus:border-lemon/40 focus:ring-2 focus:ring-lemon/10"
+                  >
+                    <option value="">Latest</option>
+                    {REPORT_YEARS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 

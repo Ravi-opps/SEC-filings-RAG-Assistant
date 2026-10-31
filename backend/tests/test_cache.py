@@ -113,7 +113,7 @@ def test_resolve_company_writes_resolution_on_miss():
     }
 
 
-def test_ingest_cache_hit_returns_resolution_without_queueing(monkeypatch, auth_headers):
+def test_ingest_cache_hit_queues_requested_year(monkeypatch, auth_headers):
     cache = FakeCache(
         {
             ticker_cache_key("AAPL"): {
@@ -123,31 +123,35 @@ def test_ingest_cache_hit_returns_resolution_without_queueing(monkeypatch, auth_
             }
         }
     )
+    published = []
 
-    async def fail_publish(job):
-        raise AssertionError("a cache hit must not publish a job")
+    async def fake_publish(job):
+        published.append(job)
 
     monkeypatch.setattr(main, "get_cache", lambda: cache)
-    monkeypatch.setattr(main, "publish_filing_job", fail_publish)
+    monkeypatch.setattr(main, "publish_filing_job", fake_publish)
 
     client = TestClient(main.app)
     response = client.post(
         "/ingest/AAPL",
-        params={"form_type": "10-K", "report_year": 2025},
+        params={"form_type": "10-K", "report_year": 2024},
         headers=auth_headers,
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 202
     body = response.json()
     assert body == {
         "ticker": "AAPL",
         "cik": 320193,
         "company": "Apple Inc.",
-        "year": 2025,
+        "year": 2024,
         "form_type": "10-K",
         "cached": True,
-        "status": "cached",
+        "status": "queued",
     }
+    assert len(published) == 1
+    assert published[0]["report_year"] == 2024
+    assert published[0]["form_type"] == "10-K"
     assert cache.writes == []
 
 

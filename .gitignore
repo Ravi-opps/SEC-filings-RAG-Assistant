@@ -11,6 +11,10 @@ __pycache__/
 # Tooling
 .deepeval/
 
+# Local evaluation output
+backend/eval*_results.json
+backend/eval*_keyword_coverage.json
+
 # SEC filing downloads
 backend/dump/
 

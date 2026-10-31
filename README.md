@@ -15,8 +15,10 @@ The full system swaps the dry run's local pieces for Kafka, Redis, and a persist
 - Answers grounded in indexed 10-K, 10-Q, and 8-K filings. Retrieval answers carry numbered sources with direct SEC links.
 - A guardrail before the planner. Off-topic prompts, investment advice, and prompt-injection attempts get a fixed refusal (`type: "blocked"`) instead of reaching the retrieval stack.
 - Username/password accounts. Signup and login issue a signed JWT, passwords are stored as bcrypt hashes in Postgres, and the chat and ingestion endpoints require a bearer token.
-- Asynchronous ingestion. On a cache miss, `POST /ingest/{ticker}` returns `202` and lets workers handle download, parse, embed, and upsert.
+- Asynchronous ingestion. `POST /ingest/{ticker}` always queues a worker job for the requested form and year; Redis only avoids re-resolving ticker metadata.
+- A pipeline dashboard. The authenticated `/ingest/status` endpoint reports expected versus indexed chunks per filing, and `/dashboard` renders those counts with retry actions.
 - Sentence-level citations. Source links prefer an exact HTML anchor, fall back to a `#:~:text=` fragment, and finally to the filing URL.
+- Reproducible retrieval evals. Two JSONL sets cover direct, temporal, spanning, comparative, numerical, relationship, and holistic questions, with MRR/Hit@k and keyword-coverage scripts.
 
 ## Architecture
 
@@ -226,7 +228,8 @@ This builds and runs the frontend, API, both Kafka workers, Postgres, Redis, and
 | `POST /auth/login` | Verifies credentials and returns the same token payload. Invalid credentials return a generic `401`. |
 | `GET /auth/me` | Returns the current user. Requires `Authorization: Bearer <token>`. |
 | `POST /query` | Routes a prompt through the agent and returns `{type, answer, sources}`. Requires `Authorization: Bearer <token>`. |
-| `POST /ingest/{ticker}` | Resolves a ticker and queues a download job on a cache miss. Query parameters: `form_type`, `report_year`, `filing_year`. Requires `Authorization: Bearer <token>`. |
+| `POST /ingest/{ticker}` | Resolves a ticker and queues a download job. Every request publishes a job so a ticker can be loaded for different forms or years. Query parameters: `form_type`, `report_year`, `filing_year`. Requires `Authorization: Bearer <token>`. |
+| `GET /ingest/status` | Reports expected and indexed chunks per filing along with per-document index state. Filters: `ticker`, `form_type`, `report_year`, `document_id`. Requires `Authorization: Bearer <token>`. |
 | `GET /sec/filing` | Resolves, downloads, extracts, and dumps one filing synchronously. Useful for inspection, not for indexing. |
 | `GET /health` | Reports which `.env` keys loaded, with masked previews. Treat it as an internal diagnostic. |
 
@@ -245,6 +248,36 @@ Each source has a `citation` number that matches the numbered context given to t
 | `anchor` | An exact HTML anchor in the SEC filing, when the record has an `anchor_id` or `source_dom_id`. |
 | `text_fragment` | A `#:~:text=` URL built from the retrieved text or the last section heading, used when no anchor exists. |
 | `document` | The filing URL without a fragment. |
+
+## Evaluation
+
+Two JSONL sets live in `backend/`. `evalset.jsonl` has 28 questions (four per question type); `eval2.jsonl` has 49 questions (seven per type). Both cover Direct Fact, Temporal, Spanning, Comparative, Numerical, Relationship, and Holistic questions against Apple's 2025 Form 10-K. Each row carries a question, reference answer, answer chunks, and source document metadata.
+
+The answer chunks are synthesized evidence summaries, not gold chunk IDs. Relevance is therefore measured by covering the evidence text, not by looking for an exact point ID. The scripts use the production path: embed the question, fetch 20 candidates from Qdrant for `aapl_2025_10k`, rerank them, and inspect only the top 5 chunks. They do not call the answer model.
+
+Run both evals from `backend/`:
+
+```powershell
+.venv\Scripts\python.exe eval_retrieval.py --evalset eval2.jsonl --json-out eval2_results.json
+.venv\Scripts\python.exe eval_keyword_coverage.py --evalset eval2.jsonl --json-out eval2_keyword_coverage.json
+```
+
+`eval_retrieval.py` reports MRR, Hit@1/3/5, mean best evidence coverage, per-type summaries, and `no_match` / `failed` counts. `eval_keyword_coverage.py` reports macro coverage, micro coverage (matched keywords / expected keywords), top-1 coverage, and the share of questions with every expected keyword present. Its default `grounded-reference` keyword source keeps reference-answer terms that also occur in the answer chunks, so derived figures absent from the filing do not count against retrieval. Use `--keyword-source reference` for full reference-answer coverage or `--keyword-source answer-chunks` for source-only coverage.
+
+Latest reference run against 1,242 AAPL chunks:
+
+| Question type | n | MRR | Hit@1 | Hit@5 | Keyword cov | Micro cov |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Direct Fact | 7 | 1.0000 | 1.000 | 1.000 | 1.000 | 1.000 |
+| Temporal | 7 | 1.0000 | 1.000 | 1.000 | 0.871 | 0.889 |
+| Spanning | 7 | 1.0000 | 1.000 | 1.000 | 0.768 | 0.735 |
+| Comparative | 7 | 0.9286 | 0.857 | 1.000 | 0.903 | 0.902 |
+| Numerical | 7 | 0.8571 | 0.857 | 0.857 | 0.643 | 0.700 |
+| Relationship | 7 | 0.8571 | 0.857 | 0.857 | 0.783 | 0.755 |
+| Holistic | 7 | 0.8857 | 0.857 | 1.000 | 0.514 | 0.538 |
+| **Overall** | **49** | **0.9327** | **0.918** | **0.959** | **0.783** | **0.728** |
+
+The two MRR misses were `NQ07` and `RQ05`: both returned a related MD&A chunk, but no evidence span cleared the default `0.35` relevance threshold. Keyword coverage falls most on holistic and spanning questions, where a correct top-5 set can still omit individual evidence terms. Thresholds, numeric weighting, top-k/final-k, and per-type filtering are configurable; see `--help` on either script. Generated JSON reports are ignored by git.
 
 ## Configuration
 
@@ -296,14 +329,20 @@ The ticker cache is fail-open. The chunk worker's Redis dependency is not; it ne
 │   ├── async_sec.py            async SEC client and resolution
 │   ├── terminal_ui.py          loader download progress
 │   ├── cache.py                fail-open Redis JSON cache
+│   ├── qdrant_load_status.py   expected/indexed chunk reporting for the dashboard
+│   ├── eval_retrieval.py       MRR and Hit@k evaluation on reranked chunks
+│   ├── eval_keyword_coverage.py keyword-coverage evaluation on reranked chunks
 │   ├── index_filing.py         single-filing CLI
+│   ├── evalset.jsonl          28-question evaluation set
+│   ├── eval2.jsonl            49-question evaluation set
 │   ├── docker-compose.yml      Postgres, Redis, and Kafka
 │   ├── .env.example            configuration template
-│   └── tests/                  parser, resolver, worker, storage, retrieval, and auth tests
+│   └── tests/                  parser, resolver, worker, storage, retrieval, eval, and auth tests
 └── frontend/
     ├── next.config.ts          backend rewrite and proxy timeout
     └── src/
         ├── app/page.tsx        auth gate, chat shell, and request lifecycle
+        ├── app/dashboard/      ingestion status dashboard
         ├── components/         auth screen, message list, source cards, composer, sidebar, ingest dialog
         └── lib/                API client, auth hook, types, chat store, backend status
 ```
@@ -316,7 +355,7 @@ Backend tests run from the repository root:
 backend\.venv\Scripts\python.exe -m pytest
 ```
 
-`pytest.ini` points at `backend/tests`. The suite covers sentence splitting, structure records, SEC downloads and document extraction, ticker and filing resolution, the loader, the Qdrant pipeline, cache behavior, terminal output, and retrieval source links.
+`pytest.ini` points at `backend/tests`. The suite covers sentence splitting, structure records, SEC downloads and document extraction, ticker and filing resolution, the loader, the Qdrant pipeline, cache behavior, terminal output, retrieval source links, ingest-status reporting, and both evaluation scripts.
 
 Frontend checks:
 
@@ -329,12 +368,12 @@ npm run build
 
 ## Operational notes and limits
 
-- Ingestion is eventually consistent. `/ingest` returns before the workers finish, and there is no job-status endpoint. Watch the loader and chunk worker logs, or query Qdrant directly, if you need to confirm completion.
-- A cached ticker short-circuits `/ingest` with `200 cached` and does not enqueue a new job. For a deliberate re-index, use `index_filing.py` or remove the ticker cache entry.
+- Ingestion is eventually consistent. `/ingest` returns before the workers finish. Use the authenticated `/ingest/status` endpoint or `/dashboard` to compare expected and indexed chunk counts; worker logs remain the source of truth for download and parse errors.
+- Every `/ingest` publishes a job, so the same ticker can be loaded for a different form or year. Redis only caches ticker resolution metadata; it no longer short-circuits the request. For a controlled single-file ingest, use `index_filing.py`.
 - In local testing, a retrieval query took roughly 30–50 seconds because it makes an embedding call, a Qdrant search, a rerank call, and an answer call. The frontend allows 180 seconds, and the Next rewrite proxy allows 240 seconds. The `experimental.proxyTimeout` setting in `frontend/next.config.ts` exists for that reason. A shorter proxy timeout produces a misleading Next.js `500` even when FastAPI is still working.
 - Conversation history is held in the FastAPI process, keyed by `X-Conversation-Id`. Restarting the API clears that history. The browser transcript stays in localStorage, but the agent's server-side context does not. Run one API process, or move history to shared storage before scaling out.
 - Redis is optional for ticker resolution and required for the worker's chunk staging. Postgres, Kafka, Redis, Qdrant, and the model endpoints are all external dependencies; the compose file provides the first three.
-- `/query` and `/ingest/{ticker}` require a bearer token; `/`, `/health`, and `/sec/filing` stay public. Rate limiting is still absent. Add it before exposing the API outside a trusted network. `.env` values stay server-side; the browser only talks to the Next rewrite.
+- `/query`, `/ingest/{ticker}`, and `/ingest/status` require a bearer token; `/`, `/health`, and `/sec/filing` stay public. Rate limiting is still absent. Add it before exposing the API outside a trusted network. `.env` values stay server-side; the browser only talks to the Next rewrite.
 - `dump/` holds raw SEC filings and is ignored by git. Delete entries to reclaim disk space; reprocessing requires the file or a fresh download.
 
 ## Security

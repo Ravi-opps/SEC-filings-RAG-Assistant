@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from async_sec import AsyncSecClient, resolve_company_async
 from auth import CurrentUser, get_current_user, init_db, router as auth_router
 from cache import DEFAULT_REDIS_URL, RedisCache, ticker_cache_key
+from chunk_store import ChunkStore
 from document_extractor import EmptyExtractionError, ExtractionError
 from filing_resolver import (
     FilingNotFoundError,
@@ -25,6 +26,8 @@ from filing_resolver import (
 )
 from input_guardrail import GuardrailConfigError, GuardrailError
 from job_queue import QueueUnavailableError, close_producer, publish_filing_job
+from qdrant_load_status import document_reports
+from qdrant_store import QdrantStore
 from retrieval_agent import (
     PlannerConfigError,
     PlannerError,
@@ -227,6 +230,58 @@ def sec_filing(
     }
 
 
+@app.get("/ingest/status")
+def ingest_status(
+    ticker: str | None = Query(
+        None, description="Optional ticker filter, e.g. NFLX"
+    ),
+    form_type: str | None = Query(
+        None, description="Optional form filter, e.g. 10-K"
+    ),
+    report_year: int | None = Query(
+        None, description="Optional report-period year filter"
+    ),
+    document_id: str | None = Query(
+        None, description="Exact document id, e.g. nflx_2025_10k"
+    ),
+    _user: CurrentUser = Depends(get_current_user),
+):
+    """Report how many chunks of each filing are loaded into Qdrant."""
+    values = reload_env()
+    if not values.get("QDRANT_URL"):
+        raise HTTPException(
+            status_code=503,
+            detail="QDRANT_URL is not configured.",
+        )
+
+    chunk_store = ChunkStore()
+    store = QdrantStore()
+    try:
+        documents = document_reports(
+            chunk_store,
+            store,
+            ticker=ticker,
+            year=report_year,
+            form=form_type,
+            document_id=document_id,
+            all_documents=document_id is None,
+        )
+    except Exception as exc:
+        LOGGER.exception("failed to read ingestion status")
+        raise HTTPException(
+            status_code=503,
+            detail="Could not read ingestion status from Redis or Qdrant.",
+        ) from exc
+    finally:
+        store.close()
+        chunk_store.close()
+
+    return {
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "documents": documents,
+    }
+
+
 @app.post("/ingest/{ticker}", status_code=202)
 async def ingest_ticker(
     ticker: str,
@@ -241,10 +296,11 @@ async def ingest_ticker(
 ):
     """Resolve a ticker and enqueue an asynchronous filing download.
 
-    Redis caches only the company name, CIK, and year. On a cache hit the
-    stored resolution is returned immediately. On a miss the ticker is
-    resolved over async HTTP, the job is published to Kafka, and the
-    resolution is cached. The ``loader`` consumer group downloads the HTML.
+    Redis caches only the company name, CIK, and year. A filing job is
+    published on every request so the same ticker can be ingested for
+    different forms or years. On a cache miss the ticker is resolved over
+    async HTTP and the resolution is cached. The ``loader`` consumer group
+    downloads the HTML.
     """
     reload_env()
     wanted = normalize_ticker(ticker)
@@ -253,36 +309,25 @@ async def ingest_ticker(
     cache = get_cache()
 
     cached = parse_cached_company(cache.get_json(ticker_cache_key(wanted)))
+    resolution_cached = cached is not None
     if cached is not None:
-        cik, company, cached_year = cached
-        return JSONResponse(
-            status_code=200,
-            content={
-                "ticker": wanted,
-                "cik": cik,
-                "company": company,
-                "year": cached_year if cached_year is not None else year,
-                "form_type": form,
-                "cached": True,
-                "status": "cached",
-            },
-        )
-
-    client = AsyncSecClient()
-    try:
-        cik, company, _ = await resolve_company_async(
-            wanted, client, cache=None, year=year
-        )
-    except (TickerNotFoundError, FilingNotFoundError) as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except MalformedMetadataError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    except (SecTimeoutError, SecConnectionError) as exc:
-        raise HTTPException(status_code=504, detail=str(exc)) from exc
-    except (SecHTTPError, SecInvalidJSONError, SecError) as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    finally:
-        await client.aclose()
+        cik, company, _ = cached
+    else:
+        client = AsyncSecClient()
+        try:
+            cik, company, _ = await resolve_company_async(
+                wanted, client, cache=None, year=year
+            )
+        except (TickerNotFoundError, FilingNotFoundError) as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except MalformedMetadataError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except (SecTimeoutError, SecConnectionError) as exc:
+            raise HTTPException(status_code=504, detail=str(exc)) from exc
+        except (SecHTTPError, SecInvalidJSONError, SecError) as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        finally:
+            await client.aclose()
 
     job = {
         "ticker": wanted,
@@ -298,10 +343,11 @@ async def ingest_ticker(
     except QueueUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    cache.set_json(
-        ticker_cache_key(wanted),
-        {"cik": cik, "company": company, "year": year},
-    )
+    if not resolution_cached:
+        cache.set_json(
+            ticker_cache_key(wanted),
+            {"cik": cik, "company": company, "year": year},
+        )
     return JSONResponse(
         status_code=202,
         content={
@@ -310,7 +356,7 @@ async def ingest_ticker(
             "company": company,
             "year": year,
             "form_type": form,
-            "cached": False,
+            "cached": resolution_cached,
             "status": "queued",
         },
     )

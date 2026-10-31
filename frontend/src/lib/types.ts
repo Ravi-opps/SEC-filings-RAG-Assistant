@@ -38,7 +38,41 @@ export interface IngestResponse {
   year: number | null;
   form_type: string;
   cached: boolean;
-  status: "queued" | "cached";
+  status: "queued";
+}
+
+export type LoadState =
+  | "complete"
+  | "in_progress"
+  | "queued"
+  | "not_loaded"
+  | "unknown";
+
+export interface IngestStatusDocument {
+  document_id: string;
+  ticker: string;
+  company: string;
+  form_type: string;
+  report_date: string;
+  accession_number: string;
+  expected_chunks: number | null;
+  loaded_chunks: number;
+  remaining_chunks: number | null;
+  pending_chunks: number;
+  percent_loaded: number | null;
+  percent_remaining: number | null;
+  complete: boolean | null;
+  state: LoadState;
+  verdict: string;
+  count_source: string;
+  redis_status: string;
+  indexed_at: string;
+  notes: string[];
+}
+
+export interface IngestStatusResponse {
+  checked_at: string;
+  documents: IngestStatusDocument[];
 }
 
 export type MessageStatus = "pending" | "complete" | "error" | "blocked";

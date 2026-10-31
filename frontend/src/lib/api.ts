@@ -2,6 +2,7 @@ import type {
   AuthResponse,
   AuthUser,
   IngestResponse,
+  IngestStatusResponse,
   QueryResponse,
   Source,
 } from "./types";
@@ -325,6 +326,29 @@ export function ingestFiling(input: {
     `/ingest/${encodeURIComponent(input.ticker)}?${params.toString()}`,
     { method: "POST" },
     45_000,
+  );
+}
+
+export function fetchIngestStatus(params: {
+  ticker?: string;
+  formType?: string;
+  reportYear?: number;
+  documentId?: string;
+} = {}): Promise<IngestStatusResponse> {
+  const query = new URLSearchParams();
+  if (params.ticker) query.set("ticker", params.ticker);
+  if (params.formType) query.set("form_type", params.formType);
+  if (params.reportYear) {
+    query.set("report_year", String(params.reportYear));
+  }
+  if (params.documentId) query.set("document_id", params.documentId);
+
+  const queryString = query.toString();
+  const suffix = queryString ? `?${queryString}` : "";
+  return request<IngestStatusResponse>(
+    `/ingest/status${suffix}`,
+    {},
+    120_000,
   );
 }
 

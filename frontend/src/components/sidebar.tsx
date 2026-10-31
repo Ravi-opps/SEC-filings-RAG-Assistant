@@ -1,7 +1,10 @@
 "use client";
 
+import Link from "next/link";
+
 import {
   DatabaseIcon,
+  LayersIcon,
   LogOutIcon,
   PlusIcon,
   SpikeMark,
@@ -227,6 +230,17 @@ export function Sidebar({
               <LogOutIcon className="h-3.5 w-3.5" />
             </button>
           </div>
+
+          <Link
+            href="/dashboard"
+            className="flex h-9 w-full items-center gap-2 rounded-lg px-3 text-[11.5px] font-medium text-muted transition hover:bg-surface-soft hover:text-ink"
+          >
+            <LayersIcon className="h-3.5 w-3.5" />
+            Pipeline status
+            <span className="ml-auto font-mono text-[9px] uppercase tracking-[0.12em] text-muted-soft">
+              live
+            </span>
+          </Link>
 
           <button
             type="button"
