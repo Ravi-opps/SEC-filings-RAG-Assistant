@@ -58,15 +58,94 @@ def database_url() -> str:
     return (os.getenv("DATABASE_URL") or DEFAULT_DATABASE_URL).strip()
 
 
+def _rds_iam_enabled() -> bool:
+    value = (os.getenv("RDS_IAM_AUTH") or "").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
+def _rds_settings() -> dict[str, str | int]:
+    host = (os.getenv("RDS_HOST") or "").strip()
+    user = (os.getenv("RDS_USER") or "").strip()
+    region = (os.getenv("RDS_REGION") or "").strip()
+    if not host or not user or not region:
+        raise AuthConfigError(
+            "RDS_IAM_AUTH is enabled but RDS_HOST, RDS_USER, and RDS_REGION "
+            "must be set."
+        )
+    try:
+        port = int(os.getenv("RDS_PORT", "5432"))
+    except ValueError as exc:
+        raise AuthConfigError("RDS_PORT must be an integer.") from exc
+    return {
+        "host": host,
+        "port": port,
+        "database": (os.getenv("RDS_DATABASE") or "postgres").strip(),
+        "user": user,
+        "region": region,
+    }
+
+
+def _rds_engine_key() -> str:
+    settings = _rds_settings()
+    return (
+        f"rds-iam://{settings['user']}@{settings['host']}:{settings['port']}"
+        f"/{settings['database']}?region={settings['region']}"
+    )
+
+
+def _build_rds_engine():
+    import boto3
+    import psycopg
+    from sqlalchemy.engine import URL
+
+    settings = _rds_settings()
+    client = boto3.client("rds", region_name=settings["region"])
+
+    def connect():
+        token = client.generate_db_auth_token(
+            DBHostname=settings["host"],
+            Port=settings["port"],
+            DBUsername=settings["user"],
+            Region=settings["region"],
+        )
+        return psycopg.connect(
+            host=settings["host"],
+            port=settings["port"],
+            dbname=settings["database"],
+            user=settings["user"],
+            password=token,
+            sslmode="require",
+            connect_timeout=10,
+        )
+
+    return create_engine(
+        URL.create(
+            "postgresql+psycopg",
+            username=settings["user"],
+            host=settings["host"],
+            port=settings["port"],
+            database=settings["database"],
+        ),
+        creator=connect,
+        pool_pre_ping=True,
+        pool_recycle=int(os.getenv("DB_POOL_RECYCLE", "600")),
+        pool_size=int(os.getenv("DB_POOL_SIZE", "5")),
+        max_overflow=int(os.getenv("DB_MAX_OVERFLOW", "10")),
+    )
+
+
 def get_engine():
     global _engine, _session_factory, _engine_url, _schema_ready
-    url = database_url()
-    if _engine is None or _engine_url != url:
+    use_iam = _rds_iam_enabled()
+    key = _rds_engine_key() if use_iam else database_url()
+    if _engine is None or _engine_url != key:
         if _engine is not None:
             _engine.dispose()
-        _engine = create_engine(url, pool_pre_ping=True)
+        _engine = _build_rds_engine() if use_iam else create_engine(
+            key, pool_pre_ping=True
+        )
         _session_factory = sessionmaker(bind=_engine, expire_on_commit=False)
-        _engine_url = url
+        _engine_url = key
         _schema_ready = False
     return _engine
 

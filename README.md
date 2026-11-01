@@ -140,7 +140,7 @@ The split is deliberate: the API does the fast part, and the slow, failure-prone
 
 - Python 3.12
 - Node.js 20.9 or newer
-- Docker, for Postgres, Redis, and Kafka
+- Docker, for local Postgres, Redis, and Kafka (or an RDS Postgres instance)
 - A Qdrant instance (Qdrant Cloud or a local server)
 - Service endpoints and keys for embeddings, reranking, and the Responses-style classifier/answer models
 - A Groq API key for the guardrail
@@ -154,6 +154,8 @@ docker compose up -d
 ```
 
 This starts Postgres on `5433` (container port `5432`), Redis on `6379`, and Kafka on `9092`. The Postgres host port is `5433` so it does not collide with a local PostgreSQL install. Qdrant is not in the compose file; point `QDRANT_URL` at your instance. The `users` table is created on API startup.
+
+To use RDS instead of the compose Postgres, set `RDS_IAM_AUTH=true` and the `RDS_*` keys in `backend/.env`. The API then generates a fresh IAM token for each new pooled connection. See [Using RDS](#using-rds) below.
 
 ### 2. Install the backend
 
@@ -177,7 +179,7 @@ This uses an in-memory Qdrant collection and a deterministic hash embedder. It s
 ### 4. Run the API
 
 ```powershell
-.venv\Scripts\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+.venv\Scripts\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload --env-file .env
 ```
 
 ### 5. Create the Kafka topics
@@ -257,7 +259,7 @@ This builds and runs the frontend, API, both Kafka workers, Postgres, Redis, and
 | Redis | `localhost:6379` |
 | Kafka | `localhost:9092` |
 
-`backend/.env` is loaded as an optional env file, so `JWT_SECRET`, `MEM0_KEY`, and the provider keys reach the API and workers. Compose overrides `DATABASE_URL`, `REDIS_URL`, and `KAFKA_BOOTSTRAP_SERVERS` with the in-network service names, and builds the frontend with `BACKEND_URL=http://backend:8000`. Set `JWT_SECRET` in that file before starting. If Qdrant runs on the host rather than in the cloud, use `host.docker.internal` in `QDRANT_URL` instead of `localhost`. Override host ports with `FRONTEND_PORT`, `BACKEND_PORT`, `POSTGRES_PORT`, `REDIS_PORT`, and `KAFKA_PORT`. Stop with `docker compose down`; add `-v` to delete the volumes.
+`backend/.env` is loaded as an optional env file, so `JWT_SECRET`, `MEM0_KEY`, and the provider keys reach the API and workers. Compose overrides `DATABASE_URL`, `REDIS_URL`, and `KAFKA_BOOTSTRAP_SERVERS` with the in-network service names, and builds the frontend with `BACKEND_URL=http://backend:8000`. When `RDS_IAM_AUTH=true`, the API uses the `RDS_*` keys and ignores the compose `DATABASE_URL`; the API container still needs AWS credentials for token generation. Set `JWT_SECRET` in that file before starting. If Qdrant runs on the host rather than in the cloud, use `host.docker.internal` in `QDRANT_URL` instead of `localhost`. Override host ports with `FRONTEND_PORT`, `BACKEND_PORT`, `POSTGRES_PORT`, `REDIS_PORT`, and `KAFKA_PORT`. Stop with `docker compose down`; add `-v` to delete the volumes.
 
 ## API
 
@@ -333,9 +335,11 @@ The two MRR misses were `NQ07` and `RQ05`: both returned a related MD&A chunk, b
 | `RERANK_URL`, `RERANK_KEY`, `RERANK_MODEL` | Cohere-style rerank endpoint. |
 | `GROQ` or `GROQ_API_KEY`, `GROQ_URL`, `GROQ_GUARDRAIL_MODEL` | Guardrail model. Default: `openai/gpt-oss-120b`. |
 | `REDIS_URL`, `REDIS_TTL_SECONDS` | Ticker cache and chunk staging. |
-| `DATABASE_URL` | SQLAlchemy URL for the auth database. Default: `postgresql+psycopg://rag:rag@localhost:5433/rag`. |
+| `DATABASE_URL` | SQLAlchemy URL for the auth database. Default: `postgresql+psycopg://rag:rag@localhost:5433/rag`. Ignored when `RDS_IAM_AUTH=true`. |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Credentials used by the compose Postgres service. Defaults: `rag`/`rag`/`rag`. |
 | `POSTGRES_PORT` | Host port for the compose Postgres service. Default: `5433`. Update `DATABASE_URL` if you change it. |
+| `RDS_IAM_AUTH`, `RDS_HOST`, `RDS_PORT`, `RDS_DATABASE`, `RDS_USER`, `RDS_REGION` | RDS IAM auth. When `RDS_IAM_AUTH=true`, these replace `DATABASE_URL`. The AWS principal needs `rds-db:connect`, and the database user needs `GRANT rds_iam`. |
+| `DB_POOL_SIZE`, `DB_MAX_OVERFLOW`, `DB_POOL_RECYCLE` | SQLAlchemy pool sizing and recycle age in seconds. Defaults: `5`, `10`, `600`. The recycle age keeps pooled connections below the 15-minute IAM token lifetime. |
 | `JWT_SECRET` | Signing key for access tokens. Required for signup, login, and protected routes; unset means `503`. |
 | `JWT_ALGORITHM`, `JWT_EXPIRE_MINUTES` | Token algorithm (`HS256`, `HS384`, or `HS512`) and lifetime. Defaults: `HS256`, `1440` minutes. |
 | `MEM0_KEY`, `MEMORY_ENABLED`, `MEM0_USER_PREFIX` | Per-user long-term memory. Memory is off without `MEM0_KEY` or with `MEMORY_ENABLED=false`; the user-id prefix defaults to `secrag:user:`. |
@@ -343,6 +347,37 @@ The two MRR misses were `NQ07` and `RQ05`: both returned a related MD&A chunk, b
 | `KAFKA_TOPIC_PARTITIONS`, `KAFKA_STEP2_TOPIC_PARTITIONS`, `KAFKA_TOPIC_REPLICATION_FACTOR`, `KAFKA_TOPIC_RETENTION_MS` | Read by `scripts/kafka_migrate.py`. Defaults: 3, 3, 1, and 604800000 (7 days). |
 | `CHUNK_PROCESSES`, `CHUNK_EMBED_BATCH_SIZE`, `CHUNK_UPLOAD_BATCH_SIZE` | Parser concurrency and embedding/upsert batch sizes. |
 | `BACKEND_URL` | Frontend-only rewrite target. Required at build time; `next.config.ts` throws if unset. Not read by FastAPI. |
+
+### Using RDS
+
+1. Enable IAM database authentication on the RDS instance.
+2. Create a dedicated app user and grant it `rds_iam` plus the table privileges it needs. Do not run the API as the `postgres` master user.
+
+```sql
+CREATE ROLE rag_app LOGIN;
+GRANT rds_iam TO rag_app;
+GRANT CONNECT ON DATABASE postgres TO rag_app;
+GRANT USAGE ON SCHEMA public TO rag_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO rag_app;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO rag_app;
+```
+
+3. Give the AWS principal `rds-db:connect` for the database user ARN.
+4. Set the RDS keys in `backend/.env`:
+
+```text
+RDS_IAM_AUTH=true
+RDS_HOST=your-instance.region.rds.amazonaws.com
+RDS_PORT=5432
+RDS_DATABASE=postgres
+RDS_USER=rag_app
+RDS_REGION=ap-south-2
+DB_POOL_RECYCLE=600
+```
+
+5. Start the API with `--env-file .env` so the keys reach the process.
+
+The engine calls `generate_db_auth_token` for each new pooled connection. Existing connections stay usable after the token expires; `pool_pre_ping` plus `DB_POOL_RECYCLE=600` replaces them before the 15-minute token lifetime ends. For multiple API replicas or heavier pooling, use RDS Proxy or the AWS Advanced Python Wrapper.
 
 The ticker cache is fail-open. The chunk worker's Redis dependency is not; it needs Redis for staging and index markers.
 

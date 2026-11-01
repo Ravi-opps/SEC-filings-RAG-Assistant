@@ -21,6 +21,10 @@ psycopg[binary]==3.3.6
 PyJWT==2.15.1
 bcrypt==5.0.0
 
+# RDS IAM auth
+boto3==1.43.123
+botocore[crt]==1.43.123
+
 # Agent and memory
 langgraph==1.2.16
 langchain-core==1.6.12
