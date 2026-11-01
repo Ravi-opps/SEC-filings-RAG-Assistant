@@ -1,9 +1,10 @@
 import type { NextConfig } from "next";
 
-const backendUrl = (process.env.BACKEND_URL ?? "http://127.0.0.1:8000").replace(
-  /\/$/,
-  "",
-);
+const backendUrl = (process.env.BACKEND_URL ?? "").trim().replace(/\/+$/, "");
+
+if (!backendUrl) {
+  throw new Error("BACKEND_URL is not set. Add it to frontend/.env.");
+}
 
 const nextConfig: NextConfig = {
   output: "standalone",
