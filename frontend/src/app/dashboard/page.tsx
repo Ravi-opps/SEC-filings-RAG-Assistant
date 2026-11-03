@@ -8,6 +8,7 @@ import { BrandMark } from "@/components/brand-mark";
 import {
   AlertIcon,
   ArrowLeftIcon,
+  GitHubIcon,
   LayersIcon,
   RefreshIcon,
 } from "@/components/icons";
@@ -361,6 +362,16 @@ export default function DashboardPage() {
               />
               <span className="hidden sm:inline">Refresh</span>
             </button>
+            <a
+              href="https://github.com/Ravi-opps/SEC-filings-RAG-Assistant"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="View source on GitHub"
+              title="View source on GitHub"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-hairline bg-surface-soft text-muted transition hover:border-lemon/30 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lemon/40"
+            >
+              <GitHubIcon className="h-4 w-4" />
+            </a>
           </div>
         </div>
       </header>
