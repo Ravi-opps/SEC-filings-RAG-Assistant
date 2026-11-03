@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import { BrandMark } from "@/components/brand-mark";
-import { AlertIcon } from "@/components/icons";
+import { AlertIcon, GitHubIcon } from "@/components/icons";
 import type { AuthUser } from "@/lib/types";
 
 type Mode = "login" | "signup";
@@ -98,6 +98,17 @@ export function AuthScreen({
       <div className="pointer-events-none absolute -left-24 top-1/2 -translate-y-1/2 select-none font-serif text-[320px] leading-none text-ink/[0.015]">
         10-K
       </div>
+
+      <a
+        href="https://github.com/Ravi-opps/SEC-filings-RAG-Assistant"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="View source on GitHub"
+        title="View source on GitHub"
+        className="absolute right-4 top-4 z-10 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-hairline bg-surface-soft text-muted transition hover:border-lemon/30 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lemon/40 sm:right-6 sm:top-6"
+      >
+        <GitHubIcon className="h-4 w-4" />
+      </a>
 
       <div className="relative grid w-full max-w-5xl gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
         <div className="hidden lg:block">
