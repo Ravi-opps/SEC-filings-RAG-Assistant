@@ -7,6 +7,7 @@ import {
   ChevronsLeftIcon,
   ChevronsRightIcon,
   DatabaseIcon,
+  FilesIcon,
   LayersIcon,
   LogOutIcon,
   PlusIcon,
@@ -24,7 +25,7 @@ const STATUS_META: Record<
   online: {
     label: "Backend online",
     dot: "bg-lemon",
-    text: "text-lemon",
+    text: "text-lemon-deep",
     detail: "FastAPI · port 8000",
   },
   offline: {
@@ -54,6 +55,7 @@ export function Sidebar({
   onNew,
   onDelete,
   onIndex,
+  onFilings,
   onRecheck,
   onLogout,
 }: {
@@ -69,6 +71,7 @@ export function Sidebar({
   onNew: () => void;
   onDelete: (id: string) => void;
   onIndex: () => void;
+  onFilings: () => void;
   onRecheck: () => void;
   onLogout: () => void;
 }) {
@@ -80,7 +83,7 @@ export function Sidebar({
         type="button"
         aria-label="Close navigation"
         onClick={onClose}
-        className={`fixed inset-0 z-30 bg-black/70 backdrop-blur-sm transition-opacity lg:hidden ${
+        className={`fixed inset-0 z-30 bg-black/40 backdrop-blur-sm transition-opacity lg:hidden ${
           open ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
       />
@@ -97,10 +100,10 @@ export function Sidebar({
         >
           <BrandMark />
           <div className="min-w-0">
-            <p className="truncate font-serif text-[21px] leading-none text-ink">
+            <p className="truncate font-text text-[17px] font-semibold leading-none text-ink">
               Filing Room
             </p>
-            <p className="mt-1.5 font-mono text-[9px] uppercase tracking-[0.22em] text-muted-soft">
+            <p className="mt-1.5 font-text text-[9px] uppercase tracking-[0.22em] text-muted-soft">
               SEC research desk
             </p>
           </div>
@@ -146,11 +149,11 @@ export function Sidebar({
           <button
             type="button"
             onClick={onNew}
-            className="group flex h-10 w-full items-center gap-2 rounded-lg bg-lemon px-3 text-[12.5px] font-semibold text-on-lemon transition hover:bg-lemon-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lemon/40"
+            className="group flex h-10 w-full items-center gap-2 rounded-lg bg-lemon px-3 text-[12.5px] font-medium text-on-lemon transition hover:bg-lemon-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lemon/40"
           >
             <PlusIcon className="h-4 w-4 transition duration-200 group-hover:rotate-90" />
             New inquiry
-            <span className="ml-auto font-mono text-[9px] uppercase tracking-[0.14em] text-on-lemon/55">
+            <span className="ml-auto font-text text-[9px] uppercase tracking-[0.14em] text-on-lemon/55">
               ⌘K
             </span>
           </button>
@@ -164,7 +167,7 @@ export function Sidebar({
           <button
             type="button"
             onClick={onNew}
-            className="flex h-10 w-full items-center justify-center rounded-lg bg-lemon text-on-lemon transition hover:bg-lemon-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lemon/40"
+            className="flex h-10 w-full items-center justify-center rounded-lg bg-lemon text-on-lemon transition hover:bg-lemon-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lemon/40"
             aria-label="New inquiry"
             title="New inquiry (Ctrl+K)"
           >
@@ -178,10 +181,10 @@ export function Sidebar({
           }`}
         >
           <div className="flex items-center justify-between px-5 pb-2">
-            <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-soft">
+            <p className="font-text text-[9px] uppercase tracking-[0.2em] text-muted-soft">
               Inquiries
             </p>
-            <span className="font-mono text-[9px] text-muted-soft">
+            <span className="font-text text-[9px] text-muted-soft">
               {conversations.length}
             </span>
           </div>
@@ -205,14 +208,14 @@ export function Sidebar({
                         }}
                         className={`flex w-full flex-col gap-1 rounded-lg py-2 pl-3 pr-8 text-left transition ${
                           isActive
-                            ? "bg-surface-card text-ink"
+                            ? "bg-cream-deeper text-ink"
                             : "text-muted hover:bg-surface-soft hover:text-body"
                         }`}
                       >
                         <span className="line-clamp-1 pr-1 text-[12px] leading-5">
                           {conversation.title}
                         </span>
-                        <span className="flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.12em] text-muted-soft">
+                        <span className="flex items-center gap-2 font-text text-[9px] uppercase tracking-[0.12em] text-muted-soft">
                           {relativeTime(conversation.updatedAt)}
                           <span className="text-hairline">/</span>
                           {conversation.messages.length} msg
@@ -245,7 +248,7 @@ export function Sidebar({
             collapsed ? "hidden lg:flex" : "hidden"
           } mt-4 min-h-0 flex-1 flex-col px-2`}
         >
-          <div className="pb-2 text-center font-mono text-[8px] uppercase tracking-[0.16em] text-muted-soft">
+          <div className="pb-2 text-center font-text text-[8px] uppercase tracking-[0.16em] text-muted-soft">
             {conversations.length ? conversations.length : "—"}
           </div>
           <nav
@@ -253,7 +256,7 @@ export function Sidebar({
             aria-label="Inquiries"
           >
             {conversations.length === 0 ? (
-              <p className="py-3 text-center font-mono text-[8px] uppercase tracking-[0.12em] text-muted-soft">
+              <p className="py-3 text-center font-text text-[8px] uppercase tracking-[0.12em] text-muted-soft">
                 —
               </p>
             ) : (
@@ -271,9 +274,9 @@ export function Sidebar({
                         title={conversation.title}
                         aria-label={`Open ${conversation.title}`}
                         aria-current={isActive ? "page" : undefined}
-                        className={`flex h-8 w-8 items-center justify-center rounded-lg border font-mono text-[9px] transition ${
+                        className={`flex h-8 w-8 items-center justify-center rounded-lg border font-text text-[9px] transition ${
                           isActive
-                            ? "border-lemon/40 bg-lemon/[0.08] text-lemon"
+                            ? "border-lemon/30 bg-cream-deeper text-lemon-deep"
                             : "border-transparent text-muted-soft hover:border-hairline hover:bg-surface-soft hover:text-body"
                         }`}
                       >
@@ -292,7 +295,7 @@ export function Sidebar({
             collapsed ? "lg:hidden" : ""
           }`}
         >
-          <div className="mb-2 rounded-xl border border-hairline bg-surface-soft px-3 py-2.5">
+          <div className="mb-2 rounded-xl border border-beige/70 bg-surface-cream px-3 py-2.5">
             <button
               type="button"
               onClick={onRecheck}
@@ -302,10 +305,10 @@ export function Sidebar({
               <span
                 id="backend-contact-hint"
                 role="tooltip"
-                className="pointer-events-none absolute bottom-full left-0 z-20 mb-2 w-max max-w-[230px] rounded-lg border border-hairline bg-surface-elevated px-2.5 py-2 text-left text-[10.5px] leading-4 text-body opacity-0 shadow-lift transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
+                className="pointer-events-none absolute bottom-full left-0 z-20 mb-2 w-max max-w-[230px] rounded-lg border border-hairline-strong bg-canvas px-2.5 py-2 text-left text-[10.5px] leading-4 text-body opacity-0 shadow-float transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
               >
                 Contact{" "}
-                <span className="font-mono text-lemon">9014805921</span> to get
+                <span className="font-text text-lemon-deep">9014805921</span> to get
                 it online
               </span>
               <span className="relative flex h-2 w-2">
@@ -325,15 +328,15 @@ export function Sidebar({
             </p>
           </div>
 
-          <div className="mb-2 flex items-center gap-2 rounded-xl border border-hairline bg-surface-soft px-2.5 py-2">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-lemon/20 bg-lemon/[0.08] font-mono text-[11px] uppercase text-lemon">
+          <div className="mb-2 flex items-center gap-2 rounded-xl border border-beige/70 bg-surface-cream px-2.5 py-2">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-lemon/30 bg-lemon/10 font-text text-[11px] uppercase text-lemon-deep">
               {user.username.slice(0, 1)}
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-[11.5px] font-medium text-body">
                 {user.username}
               </p>
-              <p className="font-mono text-[8px] uppercase tracking-[0.14em] text-muted-soft">
+              <p className="font-text text-[8px] uppercase tracking-[0.14em] text-muted-soft">
                 signed in
               </p>
             </div>
@@ -354,10 +357,22 @@ export function Sidebar({
           >
             <LayersIcon className="h-3.5 w-3.5" />
             Pipeline status
-            <span className="ml-auto font-mono text-[9px] uppercase tracking-[0.12em] text-muted-soft">
+            <span className="ml-auto font-text text-[9px] uppercase tracking-[0.12em] text-muted-soft">
               live
             </span>
           </Link>
+
+          <button
+            type="button"
+            onClick={onFilings}
+            className="flex h-9 w-full items-center gap-2 rounded-lg px-3 text-[11.5px] font-medium text-muted transition hover:bg-surface-soft hover:text-ink"
+          >
+            <FilesIcon className="h-3.5 w-3.5" />
+            Available filings
+            <span className="ml-auto font-text text-[9px] uppercase tracking-[0.12em] text-muted-soft">
+              Redis
+            </span>
+          </button>
 
           <button
             type="button"
@@ -366,7 +381,7 @@ export function Sidebar({
           >
             <DatabaseIcon className="h-3.5 w-3.5" />
             Index a filing
-            <span className="ml-auto font-mono text-[9px] uppercase tracking-[0.12em] text-muted-soft">
+            <span className="ml-auto font-text text-[9px] uppercase tracking-[0.12em] text-muted-soft">
               10-K / Q
             </span>
           </button>
@@ -400,7 +415,7 @@ export function Sidebar({
 
           <div
             title={user.username}
-            className="flex h-8 w-8 items-center justify-center rounded-full border border-hairline bg-surface-soft font-mono text-[10px] uppercase text-body"
+            className="flex h-8 w-8 items-center justify-center rounded-full border border-beige bg-surface-cream font-text text-[10px] uppercase text-body"
           >
             {user.username.slice(0, 1)}
           </div>
@@ -413,6 +428,16 @@ export function Sidebar({
           >
             <LayersIcon className="h-3.5 w-3.5" />
           </Link>
+
+          <button
+            type="button"
+            onClick={onFilings}
+            aria-label="Available filings"
+            title="Available filings"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted transition hover:bg-surface-soft hover:text-ink"
+          >
+            <FilesIcon className="h-3.5 w-3.5" />
+          </button>
 
           <button
             type="button"

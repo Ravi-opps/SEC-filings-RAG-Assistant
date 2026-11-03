@@ -255,6 +255,91 @@ def load_documents(
     return hints
 
 
+def _document_id_from_key(key: str) -> str:
+    prefix = "sec:doc:v1:"
+    suffix = ":meta"
+    if key.startswith(prefix) and key.endswith(suffix):
+        return key[len(prefix) : -len(suffix)]
+    return ""
+
+
+def filing_catalog(
+    chunk_store: ChunkStore,
+    *,
+    ticker: str | None = None,
+    year: int | None = None,
+    form: str | None = None,
+) -> list[dict[str, Any]]:
+    """List filings known to Redis, newest report date first.
+
+    Scans document metadata and indexed records once each, then reads the
+    per-document status. Indexed records keep a filing visible after its
+    metadata expires.
+    """
+    indexed_by_document: dict[str, dict[str, Any]] = {}
+    for key in chunk_store.client.scan_iter(match=_INDEXED_SCAN, count=200):
+        payload = _json_dict(chunk_store.client.get(key))
+        document_id = str(payload.get("document_id") or "")
+        if not document_id:
+            continue
+        previous = indexed_by_document.get(document_id)
+        if previous is None or str(payload.get("indexed_at") or "") > str(
+            previous.get("indexed_at") or ""
+        ):
+            indexed_by_document[document_id] = payload
+
+    meta_by_document: dict[str, dict[str, Any]] = {}
+    for key in chunk_store.client.scan_iter(match=_META_SCAN, count=200):
+        meta = _json_dict(chunk_store.client.get(key))
+        document_id = str(meta.get("document_id") or "") or _document_id_from_key(
+            key
+        )
+        if document_id:
+            meta_by_document[document_id] = meta
+
+    filings: list[dict[str, Any]] = []
+    for document_id in set(meta_by_document) | set(indexed_by_document):
+        meta = meta_by_document.get(document_id, {})
+        indexed = indexed_by_document.get(document_id, {})
+        status_payload = _load_status(chunk_store, document_id)
+        status = str(status_payload.get("status") or "")
+        if not status and indexed:
+            status = "indexed"
+        entry = {
+            "document_id": document_id,
+            "ticker": _text(meta, indexed, "ticker")
+            or _ticker_from_document_id(document_id),
+            "company": _text(meta, indexed, "company"),
+            "form_type": _text(meta, indexed, "form_type"),
+            "report_date": _text(meta, indexed, "report_date"),
+            "filing_date": _text(meta, indexed, "filing_date"),
+            "accession_number": _text(meta, indexed, "accession_number"),
+            "cik": _text(meta, indexed, "cik"),
+            "title": _text(meta, indexed, "title"),
+            "source_url": _text(meta, indexed, "source_url"),
+            "chunk_count": _first_int(
+                meta.get("chunk_count"),
+                indexed.get("points_upserted"),
+                indexed.get("records"),
+                status_payload.get("chunk_count"),
+            ),
+            "status": status,
+            "indexed_at": _text(meta, indexed, "indexed_at"),
+        }
+        if _matches(entry, ticker=ticker, year=year, form=form):
+            filings.append(entry)
+
+    filings.sort(
+        key=lambda filing: (
+            str(filing.get("report_date") or ""),
+            str(filing.get("filing_date") or ""),
+            str(filing.get("document_id") or ""),
+        ),
+        reverse=True,
+    )
+    return filings
+
+
 def _is_missing_index_error(exc: BaseException) -> bool:
     message = str(exc).lower()
     return (

@@ -18,7 +18,7 @@ import type { Source } from "@/lib/types";
 
 function CitationChip({ citation }: { citation: number }) {
   return (
-    <span className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-md border border-lemon/25 bg-lemon/10 px-1.5 font-mono text-[10px] font-medium text-lemon">
+    <span className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-md border border-lemon/30 bg-lemon/10 px-1.5 font-text text-[10px] font-medium text-lemon-deep">
       {citation}
     </span>
   );
@@ -57,7 +57,7 @@ export function SourceRow({
         <span className="block truncate text-[12.5px] font-medium leading-5 text-body transition group-hover:text-ink">
           {source.item_title || source.title}
         </span>
-        <span className="flex items-center gap-1.5 truncate font-mono text-[9px] uppercase tracking-[0.1em] text-muted-soft">
+        <span className="flex items-center gap-1.5 truncate font-text text-[9px] uppercase tracking-[0.1em] text-muted-soft">
           <span className="truncate">{meta || "SEC filing"}</span>
           {relevance !== null ? (
             <>
@@ -67,7 +67,7 @@ export function SourceRow({
           ) : null}
         </span>
       </span>
-      <ArrowUpRightIcon className="h-3.5 w-3.5 shrink-0 text-muted-soft transition group-hover:text-lemon" />
+      <ArrowUpRightIcon className="h-3.5 w-3.5 shrink-0 text-muted-soft transition group-hover:text-lemon-deep" />
     </button>
   );
 }
@@ -101,7 +101,7 @@ export function SourceSheet({
         type="button"
         aria-label="Close source panel"
         onClick={onClose}
-        className="absolute inset-0 bg-black/75 backdrop-blur-[3px]"
+        className="absolute inset-0 bg-black/40 backdrop-blur-[3px]"
       />
       <aside
         role="dialog"
@@ -113,11 +113,11 @@ export function SourceSheet({
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <CitationChip citation={source.citation} />
-              <p className="font-mono text-[9.5px] uppercase tracking-[0.2em] text-muted-soft">
+              <p className="font-text text-[9.5px] uppercase tracking-[0.2em] text-muted-soft">
                 Cited passage
               </p>
             </div>
-            <h2 className="mt-3 font-serif text-[24px] leading-tight text-ink">
+            <h2 className="mt-3 font-text text-[20px] font-semibold leading-tight text-ink">
               {source.item_title || source.title}
             </h2>
             <div className="mt-2.5 flex flex-wrap gap-1.5">
@@ -126,13 +126,13 @@ export function SourceSheet({
                 .map((value, index) => (
                   <span
                     key={`${value}-${index}`}
-                    className="rounded-md border border-hairline px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.1em] text-muted"
+                    className="rounded-md border border-hairline px-1.5 py-0.5 font-text text-[9px] uppercase tracking-[0.1em] text-muted"
                   >
                     {value}
                   </span>
                 ))}
               {relevance !== null ? (
-                <span className="rounded-md border border-lemon/25 bg-lemon/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.1em] text-lemon">
+                <span className="rounded-md border border-lemon/30 bg-lemon/10 px-1.5 py-0.5 font-text text-[9px] uppercase tracking-[0.1em] text-lemon-deep">
                   {relevance}% match
                 </span>
               ) : null}
@@ -151,7 +151,7 @@ export function SourceSheet({
         <div className="flex-1 overflow-y-auto px-6 py-6">
           {section ? (
             <div className="mb-5">
-              <p className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.18em] text-muted-soft">
+              <p className="mb-1.5 font-text text-[9px] uppercase tracking-[0.18em] text-muted-soft">
                 Filing location
               </p>
               <p className="text-[11.5px] leading-5 text-body">{section}</p>
@@ -166,21 +166,21 @@ export function SourceSheet({
           </div>
 
           <div className="mt-6 space-y-2 border-t border-hairline pt-5">
-            <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-muted-soft">
+            <p className="font-text text-[9px] uppercase tracking-[0.18em] text-muted-soft">
               Original record
             </p>
             <a
               href={source.url}
               target="_blank"
               rel="noreferrer"
-              className="flex items-center gap-2.5 rounded-lg border border-hairline bg-surface-soft px-3 py-2.5 transition hover:border-lemon/30"
+              className="flex items-center gap-2.5 rounded-lg border border-hairline-strong bg-canvas px-3 py-2.5 transition hover:border-lemon/40"
             >
-              <LinkIcon className="h-3.5 w-3.5 shrink-0 text-lemon" />
+              <LinkIcon className="h-3.5 w-3.5 shrink-0 text-lemon-deep" />
               <span className="min-w-0 flex-1">
                 <span className="block text-[12px] font-medium text-body">
                   Open cited location
                 </span>
-                <span className="block truncate font-mono text-[9.5px] text-muted-soft">
+                <span className="block truncate font-text text-[9.5px] text-muted-soft">
                   {hostOf(source.url)}
                 </span>
               </span>
@@ -191,14 +191,14 @@ export function SourceSheet({
                 href={source.document_url}
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center gap-2.5 rounded-lg border border-hairline bg-surface-soft px-3 py-2.5 transition hover:border-lemon/30"
+                className="flex items-center gap-2.5 rounded-lg border border-hairline-strong bg-canvas px-3 py-2.5 transition hover:border-lemon/40"
               >
                 <DocumentIcon className="h-3.5 w-3.5 shrink-0 text-muted" />
                 <span className="min-w-0 flex-1">
                   <span className="block text-[12px] font-medium text-body">
                     Full filing document
                   </span>
-                  <span className="block truncate font-mono text-[9.5px] text-muted-soft">
+                  <span className="block truncate font-text text-[9.5px] text-muted-soft">
                     {hostOf(source.document_url)}
                   </span>
                 </span>

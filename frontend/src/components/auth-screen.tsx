@@ -15,13 +15,13 @@ function BrandLockup({ size = "md" }: { size?: "md" | "lg" }) {
       <BrandMark size={large ? "lg" : "md"} />
       <div>
         <p
-          className={`font-serif leading-none text-ink ${
-            large ? "text-[25px]" : "text-[21px]"
+          className={`font-text font-semibold leading-none text-ink ${
+            large ? "text-[20px]" : "text-[18px]"
           }`}
         >
           Filing Room
         </p>
-        <p className="mt-1.5 font-mono text-[9px] uppercase tracking-[0.22em] text-muted-soft">
+        <p className="mt-1.5 font-text text-[9px] uppercase tracking-[0.22em] text-muted-soft">
           SEC research desk
         </p>
       </div>
@@ -94,8 +94,8 @@ export function AuthScreen({
 
   return (
     <div className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-canvas px-4 py-10 text-body">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(90%_60%_at_50%_-10%,rgba(215,255,62,0.055),transparent_60%)]" />
-      <div className="pointer-events-none absolute -left-24 top-1/2 -translate-y-1/2 select-none font-serif text-[320px] leading-none text-ink/[0.015]">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(90%_60%_at_50%_-10%,rgba(250,82,15,0.08),transparent_60%)]" />
+      <div className="pointer-events-none absolute -left-24 top-1/2 -translate-y-1/2 select-none font-display text-[320px] leading-none text-ink/[0.03]">
         10-K
       </div>
 
@@ -105,7 +105,7 @@ export function AuthScreen({
         rel="noopener noreferrer"
         aria-label="View source on GitHub"
         title="View source on GitHub"
-        className="absolute right-4 top-4 z-10 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-hairline bg-surface-soft text-muted transition hover:border-lemon/30 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lemon/40 sm:right-6 sm:top-6"
+        className="absolute right-4 top-4 z-10 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-hairline-strong bg-canvas text-muted transition hover:border-lemon/40 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lemon/40 sm:right-6 sm:top-6"
       >
         <GitHubIcon className="h-4 w-4" />
       </a>
@@ -113,18 +113,18 @@ export function AuthScreen({
       <div className="relative grid w-full max-w-5xl gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
         <div className="hidden lg:block">
           <BrandLockup size="lg" />
-          <h1 className="mt-12 font-serif text-display-lg text-ink">
+          <h1 className="mt-12 font-display text-display-lg text-ink">
             Ask the filing.
             <br />
             <span className="text-muted">Not the open web.</span>
           </h1>
-          <p className="mt-6 max-w-md text-[14px] leading-7 text-body">
+          <p className="mt-6 max-w-md text-chat text-body">
             A retrieval desk for annual and quarterly reports. Every answer is
             built from indexed passages and carries a citation back to the exact
             source on SEC EDGAR.
           </p>
           <div className="mt-10 h-px w-24 bg-lemon" />
-          <p className="mt-4 font-mono text-[9.5px] uppercase tracking-[0.22em] text-muted-soft">
+          <p className="mt-4 font-text text-[9.5px] uppercase tracking-[0.22em] text-muted-soft">
             10-K / 10-Q / 8-K · EDGAR
           </p>
         </div>
@@ -134,12 +134,12 @@ export function AuthScreen({
             <BrandLockup />
           </div>
 
-          <div className="overflow-hidden rounded-xl border border-hairline bg-surface shadow-float">
-            <div className="border-b border-hairline px-6 py-5">
-              <p className="font-mono text-[9px] uppercase tracking-[0.22em] text-lemon">
+          <div className="overflow-hidden rounded-xl border border-beige bg-surface-cream shadow-card">
+            <div className="border-b border-beige/70 px-6 py-5">
+              <p className="font-text text-[9px] uppercase tracking-[0.22em] text-lemon-deep">
                 {isSignup ? "New account" : "Welcome back"}
               </p>
-              <h2 className="mt-2 font-serif text-display-sm text-ink">
+              <h2 className="mt-2 font-display text-display-sm text-ink">
                 {isSignup ? "Create your desk." : "Sign in to the desk."}
               </h2>
               <p className="mt-2.5 text-[12px] leading-5 text-muted">
@@ -150,16 +150,16 @@ export function AuthScreen({
             </div>
 
             <div className="px-6 pb-6 pt-5">
-              <div className="mb-5 flex rounded-lg border border-hairline bg-canvas p-1">
+              <div className="mb-5 flex rounded-lg border border-hairline-strong bg-canvas p-1">
                 {(["login", "signup"] as const).map((option) => (
                   <button
                     key={option}
                     type="button"
                     onClick={() => switchMode(option)}
-                    className={`h-8 flex-1 rounded-md font-mono text-[10.5px] uppercase tracking-[0.14em] transition ${
+                    className={`h-8 flex-1 rounded-md font-text text-[10.5px] uppercase tracking-[0.14em] transition ${
                       mode === option
-                        ? "bg-surface-elevated text-ink shadow-[inset_0_0_0_1px_var(--color-hairline)]"
-                        : "text-muted hover:text-body"
+                        ? "bg-ink text-on-dark"
+                        : "text-muted hover:text-ink"
                     }`}
                   >
                     {option === "login" ? "Sign in" : "Sign up"}
@@ -189,7 +189,7 @@ export function AuthScreen({
                     autoComplete="username"
                     spellCheck={false}
                     placeholder="ada_lovelace"
-                    className="h-11 w-full rounded-lg border border-hairline bg-surface-soft px-3.5 text-[13px] text-ink outline-none transition placeholder:text-muted-soft focus:border-lemon/40 focus:ring-2 focus:ring-lemon/10"
+                    className="h-11 w-full rounded-lg border border-hairline-strong bg-canvas px-3.5 text-[13px] text-ink outline-none transition placeholder:text-muted-soft focus:border-lemon focus:ring-2 focus:ring-lemon/15"
                   />
                 </div>
 
@@ -209,7 +209,7 @@ export function AuthScreen({
                     placeholder={
                       isSignup ? "At least 8 characters" : "Your password"
                     }
-                    className="h-11 w-full rounded-lg border border-hairline bg-surface-soft px-3.5 text-[13px] text-ink outline-none transition placeholder:text-muted-soft focus:border-lemon/40 focus:ring-2 focus:ring-lemon/10"
+                    className="h-11 w-full rounded-lg border border-hairline-strong bg-canvas px-3.5 text-[13px] text-ink outline-none transition placeholder:text-muted-soft focus:border-lemon focus:ring-2 focus:ring-lemon/15"
                   />
                 </div>
 
@@ -228,7 +228,7 @@ export function AuthScreen({
                       onChange={(event) => setConfirm(event.target.value)}
                       autoComplete="new-password"
                       placeholder="Repeat the password"
-                      className="h-11 w-full rounded-lg border border-hairline bg-surface-soft px-3.5 text-[13px] text-ink outline-none transition placeholder:text-muted-soft focus:border-lemon/40 focus:ring-2 focus:ring-lemon/10"
+                      className="h-11 w-full rounded-lg border border-hairline-strong bg-canvas px-3.5 text-[13px] text-ink outline-none transition placeholder:text-muted-soft focus:border-lemon focus:ring-2 focus:ring-lemon/15"
                     />
                   </div>
                 ) : null}
@@ -246,7 +246,7 @@ export function AuthScreen({
                 <button
                   type="submit"
                   disabled={submitting || !username.trim() || !password}
-                  className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-lemon text-[13px] font-semibold text-on-lemon transition hover:bg-lemon-bright disabled:cursor-not-allowed disabled:bg-surface-elevated disabled:text-muted-soft"
+                  className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-lemon text-[13px] font-medium text-on-lemon transition hover:bg-lemon-deep disabled:cursor-not-allowed disabled:bg-hairline disabled:text-muted"
                 >
                   {submitting ? (
                     <>
@@ -261,7 +261,7 @@ export function AuthScreen({
                 </button>
               </form>
 
-              <p className="mt-4 text-center text-[10px] leading-4 text-muted-soft">
+              <p className="mt-4 text-center text-[10px] leading-4 text-muted">
                 Passwords are hashed with bcrypt. Sessions use a signed JWT.
               </p>
             </div>

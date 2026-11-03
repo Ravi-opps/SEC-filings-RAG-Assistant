@@ -38,19 +38,19 @@ function EmptyState({
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col px-4 pb-12 pt-12 sm:px-8 sm:pt-20">
       <div className="relative">
-        <div className="pointer-events-none absolute -left-8 -top-14 select-none font-serif text-[160px] leading-none text-ink/[0.02] sm:-left-14 sm:text-[220px]">
+        <div className="pointer-events-none absolute -left-8 -top-14 select-none font-display text-[160px] leading-none text-ink/[0.03] sm:-left-14 sm:text-[220px]">
           10-K
         </div>
-        <p className="relative inline-flex items-center gap-2 font-mono text-[9.5px] uppercase tracking-[0.28em] text-lemon">
+        <p className="relative inline-flex items-center gap-2 font-text text-[9.5px] uppercase tracking-[0.28em] text-lemon-deep">
           <span className="h-1.5 w-1.5 bg-lemon" />
           SEC filing intelligence
         </p>
-        <h1 className="relative mt-5 max-w-xl font-serif text-display-md text-ink sm:text-display-xl">
+        <h1 className="relative mt-5 max-w-xl font-display text-display-md text-ink sm:text-display-lg">
           Ask the filing.
           <br />
           <span className="text-muted">Not the open web.</span>
         </h1>
-        <p className="relative mt-6 max-w-lg text-[14px] leading-7 text-body">
+        <p className="relative mt-6 max-w-lg text-chat text-body">
           A retrieval desk for annual and quarterly reports. Every answer is
           built from indexed passages and carries a citation back to the exact
           source on SEC EDGAR.
@@ -61,12 +61,12 @@ function EmptyState({
         <div className="mt-8 flex items-start gap-3 rounded-xl border border-warn/20 bg-warn/[0.06] px-4 py-3">
           <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-warn" />
           <div>
-            <p className="text-[12px] font-medium text-warn">
+            <p className="text-[12px] font-semibold text-warn">
               Retrieval backend is offline
             </p>
             <p className="mt-0.5 text-[11.5px] leading-5 text-muted">
               Start FastAPI with{" "}
-              <code className="rounded border border-hairline bg-surface-card px-1 py-0.5 font-mono text-[10.5px] text-body">
+              <code className="rounded border border-beige bg-surface-cream px-1 py-0.5 font-mono text-[10.5px] text-lemon-deep">
                 python main.py
               </code>{" "}
               in the backend folder, then send a question.
@@ -77,7 +77,7 @@ function EmptyState({
 
       <div className="mt-10">
         <div className="mb-3 flex items-center gap-3">
-          <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-soft">
+          <p className="font-text text-[9px] uppercase tracking-[0.2em] text-muted-soft">
             Start with a line of inquiry
           </p>
           <span className="h-px flex-1 bg-hairline" />
@@ -89,15 +89,15 @@ function EmptyState({
               type="button"
               onClick={() => onSend(suggestion.prompt)}
               disabled={backendStatus === "offline"}
-              className="group flex flex-col gap-3 rounded-xl border border-hairline bg-surface-card/60 p-4 text-left transition hover:border-lemon/30 hover:bg-surface-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lemon/30 disabled:cursor-not-allowed disabled:opacity-50"
+              className="group flex flex-col gap-3 rounded-xl border border-hairline-soft bg-canvas p-4 text-left transition hover:border-lemon/30 hover:bg-surface-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lemon/30 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <span className="flex items-center justify-between">
-                <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-muted-soft transition group-hover:text-lemon">
+                <span className="font-text text-[9px] uppercase tracking-[0.18em] text-muted-soft transition group-hover:text-lemon-deep">
                   {suggestion.category}
                 </span>
-                <ArrowUpRightIcon className="h-3.5 w-3.5 text-muted-soft transition group-hover:text-lemon" />
+                <ArrowUpRightIcon className="h-3.5 w-3.5 text-muted-soft transition group-hover:text-lemon-deep" />
               </span>
-              <span className="text-[12.5px] leading-5 text-body transition group-hover:text-ink">
+              <span className="text-[14.5px] leading-6 text-body transition group-hover:text-ink">
                 {suggestion.prompt}
               </span>
             </button>
@@ -113,7 +113,7 @@ function EmptyState({
         <button
           type="button"
           onClick={onIndex}
-          className="text-[11px] font-medium text-lemon underline decoration-lemon/30 underline-offset-4 transition hover:decoration-lemon"
+          className="text-[11px] font-medium text-lemon-deep underline decoration-lemon/30 underline-offset-4 transition hover:decoration-lemon"
         >
           Index a filing
         </button>

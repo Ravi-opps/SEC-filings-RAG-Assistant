@@ -2,6 +2,7 @@ import json
 
 from qdrant_load_status import (
     build_report,
+    filing_catalog,
     load_documents,
     render_compact,
     render_report,
@@ -26,14 +27,17 @@ class FakeRedis:
 
 
 class FakeChunkStore:
-    def __init__(self, metas=None, indexed=None):
+    def __init__(self, metas=None, indexed=None, statuses=None):
         self.metas = metas or {}
         self.indexed = indexed or {}
+        self.statuses = statuses or {}
         values = {}
         for document_id, meta in self.metas.items():
             values[f"sec:doc:v1:{document_id}:meta"] = json.dumps(meta)
         for key, payload in self.indexed.items():
             values[f"sec:indexed:v1:{key}"] = json.dumps(payload)
+        for document_id, status in self.statuses.items():
+            values[f"sec:doc:v1:{document_id}:status"] = json.dumps(status)
         self.client = FakeRedis(values)
 
     def get_meta(self, document_id):
@@ -201,3 +205,91 @@ def test_load_documents_uses_indexed_metadata_after_meta_expiry():
 
     assert [hint.document_id for hint in hints] == ["aapl_2025_10k"]
     assert hints[0].meta["chunk_count"] == 1242
+
+
+def test_filing_catalog_merges_metadata_indexed_records_and_status():
+    store = FakeChunkStore(
+        metas={
+            "nflx_2025_10k": {
+                "document_id": "nflx_2025_10k",
+                "ticker": "NFLX",
+                "company": "NETFLIX INC",
+                "form_type": "10-K",
+                "report_date": "2025-12-31",
+                "filing_date": "2026-01-28",
+                "accession_number": "0001065280-26-000034",
+                "cik": "1065280",
+                "title": "Netflix 2025 Annual Report",
+                "source_url": "https://www.sec.gov/Archives/nflx.htm",
+                "chunk_count": 1434,
+            }
+        },
+        indexed={
+            "0001065280-26-000034": {
+                "document_id": "nflx_2025_10k",
+                "indexed_at": "2026-10-30T10:00:00+00:00",
+                "points_upserted": 1434,
+            },
+            "0000320193-25-000079": {
+                "document_id": "aapl_2025_10k",
+                "ticker": "AAPL",
+                "company": "Apple Inc.",
+                "form_type": "10-K",
+                "report_date": "2025-09-27",
+                "filing_date": "2025-10-31",
+                "accession_number": "0000320193-25-000079",
+                "cik": "320193",
+                "source_url": "https://www.sec.gov/Archives/aapl.htm",
+                "points_upserted": 1242,
+                "indexed_at": "2026-10-29T09:00:00+00:00",
+            },
+        },
+        statuses={"nflx_2025_10k": {"status": "embedded"}},
+    )
+
+    filings = filing_catalog(store)
+
+    assert [filing["document_id"] for filing in filings] == [
+        "nflx_2025_10k",
+        "aapl_2025_10k",
+    ]
+    netflix = filings[0]
+    assert netflix["status"] == "embedded"
+    assert netflix["chunk_count"] == 1434
+    assert netflix["title"] == "Netflix 2025 Annual Report"
+    assert netflix["indexed_at"] == "2026-10-30T10:00:00+00:00"
+    assert netflix["filing_date"] == "2026-01-28"
+    apple = filings[1]
+    assert apple["status"] == "indexed"
+    assert apple["chunk_count"] == 1242
+    assert apple["ticker"] == "AAPL"
+    assert apple["source_url"] == "https://www.sec.gov/Archives/aapl.htm"
+
+
+def test_filing_catalog_filters_by_ticker_year_and_form():
+    store = FakeChunkStore(
+        metas={
+            "nflx_2025_10k": {
+                "document_id": "nflx_2025_10k",
+                "ticker": "NFLX",
+                "form_type": "10-K",
+                "report_date": "2025-12-31",
+            },
+            "nflx_2024_10k": {
+                "document_id": "nflx_2024_10k",
+                "ticker": "NFLX",
+                "form_type": "10-K",
+                "report_date": "2024-12-31",
+            },
+            "aapl_2025_10k": {
+                "document_id": "aapl_2025_10k",
+                "ticker": "AAPL",
+                "form_type": "10-K",
+                "report_date": "2025-09-27",
+            },
+        }
+    )
+
+    filings = filing_catalog(store, ticker="nflx", year=2025, form="10-k")
+
+    assert [filing["document_id"] for filing in filings] == ["nflx_2025_10k"]

@@ -182,6 +182,16 @@ export function LogOutIcon(props: IconProps) {
   );
 }
 
+export function FilesIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M9 3h6l4 4v12H9z" />
+      <path d="M15 3v4h4M6 6v15h10" />
+      <path d="M12 11h4M12 15h4" />
+    </Icon>
+  );
+}
+
 export function DocumentIcon(props: IconProps) {
   return (
     <Icon {...props}>

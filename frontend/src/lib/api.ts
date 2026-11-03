@@ -1,6 +1,7 @@
 import type {
   AuthResponse,
   AuthUser,
+  FilingsResponse,
   IngestResponse,
   IngestStatusResponse,
   QueryResponse,
@@ -350,6 +351,23 @@ export function fetchIngestStatus(params: {
     {},
     120_000,
   );
+}
+
+export function listFilings(params: {
+  ticker?: string;
+  formType?: string;
+  reportYear?: number;
+} = {}): Promise<FilingsResponse> {
+  const query = new URLSearchParams();
+  if (params.ticker) query.set("ticker", params.ticker);
+  if (params.formType) query.set("form_type", params.formType);
+  if (params.reportYear) {
+    query.set("report_year", String(params.reportYear));
+  }
+
+  const queryString = query.toString();
+  const suffix = queryString ? `?${queryString}` : "";
+  return request<FilingsResponse>(`/filings${suffix}`, {}, 30_000);
 }
 
 export function checkBackend(): Promise<{ service: string }> {

@@ -1,76 +1,98 @@
 @import "tailwindcss";
 
 @theme static {
-  /* Surfaces — warm near-black, never cool slate */
-  --color-canvas: #0a0a08;
-  --color-surface: #0f0f0d;
-  --color-surface-soft: #121210;
-  --color-surface-card: #161613;
-  --color-surface-elevated: #1c1c18;
-  --color-hairline: #3a3a30;
-  --color-hairline-soft: #2e2e26;
+  /* Surfaces — editorial white canvas with warm cream accents */
+  --color-canvas: #ffffff;
+  --color-surface: #fafafa;
+  --color-surface-soft: #fffaeb;
+  --color-surface-cream: #fff8e0;
+  --color-surface-card: #ffffff;
+  --color-surface-elevated: #ffffff;
+  --color-surface-code: #1c1c1e;
+  --color-hairline: #e5e5e5;
+  --color-hairline-soft: #ededed;
+  --color-hairline-strong: #c7c7c7;
+  --color-beige: #e6d5a8;
+  --color-cream-deeper: #fff0c2;
+  --color-on-dark: #ffffff;
+  --color-on-dark-muted: #a8a8a8;
 
   /* Text */
-  --color-ink: #f4f2e9;
-  --color-body: #c7c3b6;
-  --color-muted: #908c7f;
-  --color-muted-soft: #7a766a;
+  --color-ink: #1f1f1f;
+  --color-body: #3d3d3d;
+  --color-muted: #6a6a6a;
+  --color-muted-soft: #6f6f6f;
 
-  /* Brand — lemon green */
-  --color-lemon: #d7ff3e;
-  --color-lemon-bright: #e7ff7a;
-  --color-lemon-deep: #b8e42b;
-  --color-on-lemon: #0b0c05;
+  /* Brand — Mistral sunset orange */
+  --color-lemon: #fa520f;
+  --color-lemon-bright: #ff6b2c;
+  --color-lemon-deep: #cc3a05;
+  --color-on-lemon: #ffffff;
 
   /* Semantic */
-  --color-warn: #e8b44a;
-  --color-danger: #e0715e;
-  --color-success: #86d98b;
+  --color-warn: #b45309;
+  --color-danger: #b42318;
+  --color-success: #067647;
 
   /* Type */
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-serif: var(--font-instrument-serif), "Iowan Old Style", Georgia,
-    "Times New Roman", serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo,
-    monospace;
+  --font-text: "SF Pro Text", -apple-system, BlinkMacSystemFont,
+    var(--font-inter), "Helvetica Neue", Arial, sans-serif;
+  --font-display: "SF Pro Display", -apple-system, BlinkMacSystemFont,
+    var(--font-inter), "Helvetica Neue", Arial, sans-serif;
+  --font-sans: var(--font-text);
+  --font-mono: "SF Mono", ui-monospace, var(--font-jetbrains-mono),
+    "Cascadia Code", "Segoe UI Mono", Menlo, Consolas, monospace;
 
-  --text-display-xl: 4rem;
+  --text-display-xl: 5.25rem;
   --text-display-xl--line-height: 1.05;
-  --text-display-xl--letter-spacing: -1.5px;
-  --text-display-lg: 3rem;
+  --text-display-xl--letter-spacing: -0.5px;
+  --text-display-lg: 4rem;
   --text-display-lg--line-height: 1.1;
-  --text-display-lg--letter-spacing: -1px;
-  --text-display-md: 2.25rem;
+  --text-display-lg--letter-spacing: -0.4px;
+  --text-display-md: 3.25rem;
   --text-display-md--line-height: 1.15;
-  --text-display-md--letter-spacing: -0.5px;
-  --text-display-sm: 1.75rem;
+  --text-display-md--letter-spacing: -0.3px;
+  --text-display-sm: 2.25rem;
   --text-display-sm--line-height: 1.2;
-  --text-display-sm--letter-spacing: -0.3px;
-  --text-title-lg: 1.375rem;
-  --text-title-lg--line-height: 1.3;
-  --text-title-md: 1.125rem;
-  --text-title-md--line-height: 1.4;
-  --text-title-sm: 1rem;
+  --text-display-sm--letter-spacing: -0.2px;
+  --text-stat: 3.5rem;
+  --text-stat--line-height: 1.1;
+  --text-stat--letter-spacing: -0.4px;
+  --text-title-lg: 1.75rem;
+  --text-title-lg--line-height: 1.25;
+  --text-title-lg--letter-spacing: -0.374px;
+  --text-title-md: 1.375rem;
+  --text-title-md--line-height: 1.3;
+  --text-title-md--letter-spacing: -0.2px;
+  --text-title-sm: 1.125rem;
   --text-title-sm--line-height: 1.4;
-  --text-body-md: 1rem;
-  --text-body-md--line-height: 1.55;
+  --text-title-sm--letter-spacing: -0.1px;
+  --text-body-md: 1.0625rem;
+  --text-body-md--line-height: 1.47;
+  --text-body-md--letter-spacing: -0.374px;
   --text-body-sm: 0.875rem;
-  --text-body-sm--line-height: 1.55;
+  --text-body-sm--line-height: 1.5;
+  --text-body-sm--letter-spacing: -0.224px;
+  --text-chat: 1.0625rem;
+  --text-chat--line-height: 1.47;
+  --text-chat--letter-spacing: -0.374px;
   --text-caption: 0.8125rem;
   --text-caption--line-height: 1.4;
-  --text-overline: 0.75rem;
+  --text-caption--letter-spacing: 0;
+  --text-overline: 0.6875rem;
   --text-overline--line-height: 1.4;
-  --text-overline--letter-spacing: 1.5px;
+  --text-overline--letter-spacing: 1px;
 
-  /* Elevation — color-block first, shadow rare */
-  --shadow-card: 0 1px 3px rgba(10, 10, 8, 0.35);
-  --shadow-lift: 0 16px 48px rgba(0, 0, 0, 0.4);
-  --shadow-float: 0 30px 100px rgba(0, 0, 0, 0.6);
+  /* Elevation — flat by default, soft shadows for cards and modals */
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-lift: 0 4px 12px rgba(0, 0, 0, 0.04);
+  --shadow-float: 0 16px 48px -8px rgba(0, 0, 0, 0.12);
 }
 
 @layer base {
   html {
     height: 100%;
+    color-scheme: light;
     -webkit-tap-highlight-color: transparent;
   }
 
@@ -78,14 +100,43 @@
     min-height: 100%;
     background-color: var(--color-canvas);
     color: var(--color-body);
-    font-family: var(--font-sans);
-    font-feature-settings: "ss01" on, "cv11" on;
+    font-family: var(--font-text);
+    font-feature-settings: "ss03";
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
   }
 
+  body::after {
+    content: "";
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 45;
+    height: 5px;
+    pointer-events: none;
+    background: linear-gradient(
+      90deg,
+      #fa520f 0%,
+      #ffa110 28%,
+      #ffb83e 52%,
+      #ffd900 76%,
+      #fff8e0 100%
+    );
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-display);
+    font-weight: 600;
+  }
+
   ::selection {
-    background: color-mix(in srgb, var(--color-lemon) 24%, transparent);
+    background: color-mix(in srgb, var(--color-lemon) 20%, transparent);
     color: var(--color-ink);
   }
 
@@ -96,7 +147,7 @@
 
   * {
     scrollbar-width: thin;
-    scrollbar-color: var(--color-hairline) transparent;
+    scrollbar-color: var(--color-hairline-strong) transparent;
   }
 
   *::-webkit-scrollbar {
@@ -111,17 +162,23 @@
   *::-webkit-scrollbar-thumb {
     border: 3px solid transparent;
     border-radius: 999px;
-    background: var(--color-hairline);
+    background: var(--color-hairline-strong);
     background-clip: content-box;
   }
 
   *::-webkit-scrollbar-thumb:hover {
-    background: #35352c;
+    background: var(--color-muted-soft);
     background-clip: content-box;
   }
 
   textarea {
     field-sizing: content;
+  }
+}
+
+@media (max-width: 640px) {
+  body::after {
+    height: 4px;
   }
 }
 

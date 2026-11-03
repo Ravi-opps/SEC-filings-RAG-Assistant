@@ -33,7 +33,7 @@ from memory_service import (
     memory_enabled,
     memory_user_id,
 )
-from qdrant_load_status import document_reports
+from qdrant_load_status import document_reports, filing_catalog
 from qdrant_store import QdrantStore
 from retrieval_agent import (
     PlannerConfigError,
@@ -110,6 +110,27 @@ class QueryResponse(BaseModel):
     type: Literal["conversational", "retrieval", "blocked"]
     answer: str | None = None
     sources: list[SourceInfo] = Field(default_factory=list)
+
+
+class FilingInfo(BaseModel):
+    document_id: str
+    ticker: str = ""
+    company: str = ""
+    form_type: str = ""
+    report_date: str = ""
+    filing_date: str = ""
+    accession_number: str = ""
+    cik: str = ""
+    title: str = ""
+    source_url: str = ""
+    chunk_count: int | None = None
+    status: str = ""
+    indexed_at: str = ""
+
+
+class FilingsResponse(BaseModel):
+    checked_at: str
+    filings: list[FilingInfo] = Field(default_factory=list)
 
 
 def reload_env() -> dict[str, str]:
@@ -348,6 +369,44 @@ def ingest_status(
         "checked_at": datetime.now(timezone.utc).isoformat(),
         "documents": documents,
     }
+
+
+@app.get("/filings", response_model=FilingsResponse)
+def filings(
+    ticker: str | None = Query(
+        None, description="Optional ticker filter, e.g. NFLX"
+    ),
+    form_type: str | None = Query(
+        None, description="Optional form filter, e.g. 10-K"
+    ),
+    report_year: int | None = Query(
+        None, description="Optional report-period year filter"
+    ),
+    _user: CurrentUser = Depends(get_current_user),
+):
+    """List filings currently tracked in Redis."""
+    reload_env()
+    chunk_store = ChunkStore()
+    try:
+        catalog = filing_catalog(
+            chunk_store,
+            ticker=ticker,
+            year=report_year,
+            form=form_type,
+        )
+    except Exception as exc:
+        LOGGER.exception("failed to list filings")
+        raise HTTPException(
+            status_code=503,
+            detail="Could not read filings from Redis.",
+        ) from exc
+    finally:
+        chunk_store.close()
+
+    return FilingsResponse(
+        checked_at=datetime.now(timezone.utc).isoformat(),
+        filings=[FilingInfo.model_validate(item) for item in catalog],
+    )
 
 
 @app.post("/ingest/{ticker}", status_code=202)

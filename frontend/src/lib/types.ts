@@ -75,6 +75,27 @@ export interface IngestStatusResponse {
   documents: IngestStatusDocument[];
 }
 
+export interface FilingInfo {
+  document_id: string;
+  ticker: string;
+  company: string;
+  form_type: string;
+  report_date: string;
+  filing_date: string;
+  accession_number: string;
+  cik: string;
+  title: string;
+  source_url: string;
+  chunk_count: number | null;
+  status: string;
+  indexed_at: string;
+}
+
+export interface FilingsResponse {
+  checked_at: string;
+  filings: FilingInfo[];
+}
+
 export type MessageStatus = "pending" | "complete" | "error" | "blocked";
 
 export interface ChatMessage {

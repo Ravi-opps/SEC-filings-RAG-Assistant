@@ -110,20 +110,20 @@ export function IngestDialog({
         type="button"
         aria-label="Close ingest dialog"
         onClick={onClose}
-        className="absolute inset-0 bg-black/75 backdrop-blur-[3px]"
+        className="absolute inset-0 bg-black/40 backdrop-blur-[3px]"
       />
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Index a filing"
-        className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-hairline bg-surface shadow-float"
+        className="relative w-full max-w-lg overflow-hidden rounded-xl border border-hairline-strong bg-canvas shadow-float"
       >
         <div className="flex items-start justify-between gap-4 border-b border-hairline px-6 py-5">
           <div>
-            <p className="font-mono text-[9.5px] uppercase tracking-[0.2em] text-lemon">
+            <p className="font-text text-[9.5px] uppercase tracking-[0.2em] text-lemon-deep">
               Ingestion queue
             </p>
-            <h2 className="mt-1.5 font-serif text-display-sm leading-none text-ink">
+            <h2 className="mt-1.5 font-text text-title-lg font-semibold text-ink">
               Index a filing
             </h2>
             <p className="mt-2 max-w-sm text-[12px] leading-5 text-muted">
@@ -136,7 +136,7 @@ export function IngestDialog({
             type="button"
             onClick={onClose}
             aria-label="Close ingest dialog"
-            className="rounded-lg border border-hairline p-2 text-muted transition hover:border-lemon/30 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lemon/40"
+            className="rounded-lg border border-hairline-strong p-2 text-muted transition hover:border-lemon/40 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lemon/40"
           >
             <XIcon className="h-4 w-4" />
           </button>
@@ -144,9 +144,9 @@ export function IngestDialog({
 
         <div className="px-6 py-5">
           {result ? (
-            <div className="rounded-xl border border-hairline bg-surface-soft p-4">
+            <div className="rounded-xl border border-beige bg-surface-cream p-4">
               <div className="flex items-start gap-3">
-                <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-lemon/25 bg-lemon/10 text-lemon">
+                <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-lemon/30 bg-lemon/10 text-lemon-deep">
                   {result.cached ? (
                     <DatabaseIcon className="h-4 w-4" />
                   ) : (
@@ -157,19 +157,19 @@ export function IngestDialog({
                   <p className="text-[13.5px] font-medium text-ink">
                     Queued for ingestion
                   </p>
-                  <p className="mt-1 font-mono text-[11px] leading-5 text-body">
+                  <p className="mt-1 font-text text-[11px] leading-5 text-body">
                     {result.ticker} · {result.company}
                   </p>
                   <div className="mt-2 flex flex-wrap gap-1.5">
-                    <span className="rounded-md border border-hairline px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-muted">
+                    <span className="rounded-md border border-hairline px-1.5 py-0.5 font-text text-[9px] uppercase tracking-[0.12em] text-muted">
                       {result.form_type}
                     </span>
                     {result.year ? (
-                      <span className="rounded-md border border-hairline px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-muted">
+                      <span className="rounded-md border border-hairline px-1.5 py-0.5 font-text text-[9px] uppercase tracking-[0.12em] text-muted">
                         {result.year}
                       </span>
                     ) : null}
-                    <span className="rounded-md border border-hairline px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-muted">
+                    <span className="rounded-md border border-hairline px-1.5 py-0.5 font-text text-[9px] uppercase tracking-[0.12em] text-muted">
                       CIK {result.cik}
                     </span>
                   </div>
@@ -206,7 +206,7 @@ export function IngestDialog({
                   spellCheck={false}
                   autoComplete="off"
                   placeholder="AAPL"
-                  className="h-11 w-full rounded-lg border border-hairline bg-surface-soft px-3.5 font-mono text-[13px] uppercase tracking-[0.08em] text-ink outline-none transition placeholder:text-muted-soft focus:border-lemon/40 focus:ring-2 focus:ring-lemon/10"
+                  className="h-11 w-full rounded-lg border border-hairline-strong bg-canvas px-3.5 font-text text-[13px] uppercase tracking-[0.08em] text-ink outline-none transition placeholder:text-muted-soft focus:border-lemon focus:ring-2 focus:ring-lemon/15"
                 />
               </div>
 
@@ -215,16 +215,16 @@ export function IngestDialog({
                   <span className="mb-1.5 block text-[11px] font-medium text-muted">
                     Form
                   </span>
-                  <div className="flex rounded-lg border border-hairline bg-canvas p-1">
+                  <div className="flex rounded-lg border border-hairline-strong bg-canvas p-1">
                     {FORM_TYPES.map((option) => (
                       <button
                         key={option}
                         type="button"
                         onClick={() => setFormType(option)}
-                        className={`h-8 flex-1 rounded-md font-mono text-[11px] transition ${
+                        className={`h-8 flex-1 rounded-md font-text text-[11px] transition ${
                           formType === option
-                            ? "bg-surface-elevated text-ink shadow-[inset_0_0_0_1px_var(--color-hairline)]"
-                            : "text-muted hover:text-body"
+                            ? "bg-ink text-on-dark"
+                            : "text-muted hover:text-ink"
                         }`}
                       >
                         {option}
@@ -243,7 +243,7 @@ export function IngestDialog({
                     id="report-year"
                     value={year}
                     onChange={(event) => setYear(event.target.value)}
-                    className="h-10 w-full rounded-lg border border-hairline bg-surface-soft px-3 font-mono text-[12px] text-ink outline-none transition [color-scheme:dark] focus:border-lemon/40 focus:ring-2 focus:ring-lemon/10"
+                    className="h-10 w-full rounded-lg border border-hairline-strong bg-canvas px-3 font-text text-[12px] text-ink outline-none transition [color-scheme:light] focus:border-lemon focus:ring-2 focus:ring-lemon/15"
                   >
                     <option value="">Latest</option>
                     {REPORT_YEARS.map((option) => (
@@ -275,7 +275,7 @@ export function IngestDialog({
               <button
                 type="submit"
                 disabled={submitting || !ticker.trim()}
-                className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-lemon text-[13px] font-semibold text-on-lemon transition hover:bg-lemon-bright disabled:cursor-not-allowed disabled:bg-surface-elevated disabled:text-muted-soft"
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-lemon text-[13px] font-medium text-on-lemon transition hover:bg-lemon-deep disabled:cursor-not-allowed disabled:bg-hairline disabled:text-muted"
               >
                 {submitting ? (
                   <>
@@ -298,18 +298,18 @@ export function IngestDialog({
         </div>
 
         {result ? (
-          <div className="flex gap-2 border-t border-hairline bg-canvas/40 px-6 py-4">
+          <div className="flex gap-2 border-t border-beige/60 bg-surface-cream/60 px-6 py-4">
             <button
               type="button"
               onClick={reset}
-              className="h-9 flex-1 rounded-lg border border-hairline text-[12px] font-medium text-body transition hover:border-lemon/30 hover:text-ink"
+              className="h-9 flex-1 rounded-lg border border-hairline-strong text-[12px] font-medium text-body transition hover:border-lemon/40 hover:text-ink"
             >
               Queue another
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="h-9 flex-1 rounded-lg bg-lemon text-[12px] font-semibold text-on-lemon transition hover:bg-lemon-bright"
+              className="h-9 flex-1 rounded-lg bg-lemon text-[12px] font-medium text-on-lemon transition hover:bg-lemon-deep"
             >
               Done
             </button>

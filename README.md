@@ -19,6 +19,7 @@ The full system swaps the dry run's local pieces for Kafka, Redis, and a persist
 - User-scoped long-term memory. Mem0 stores turns per authenticated user, and each query starts with a memory search whose results are injected as background context. Memory is skipped when `MEM0_KEY` is unset, and a memory failure never fails the request.
 - Asynchronous ingestion. `POST /ingest/{ticker}` always queues a worker job for the requested form and year; Redis only avoids re-resolving ticker metadata.
 - A pipeline dashboard. The authenticated `/ingest/status` endpoint reports expected versus indexed chunks per filing, and `/dashboard` renders those counts with retry actions.
+- A filing browser. The authenticated `/filings` endpoint lists every tracked filing from Redis, including ticker, form, report date, chunk count, and index status. The **Filings** button in the chat header and sidebar opens the same list with client-side search and SEC links.
 - Sentence-level citations. Source links prefer an exact HTML anchor, fall back to a `#:~:text=` fragment, and finally to the filing URL.
 - Reproducible retrieval evals. Two JSONL sets cover direct, temporal, spanning, comparative, numerical, relationship, and holistic questions, with MRR/Hit@k and keyword-coverage scripts.
 
@@ -281,6 +282,7 @@ This builds and runs the frontend, API, both Kafka workers, Postgres, Redis, and
 | `POST /query/stream` | Same request and auth as `/query`, streamed as SSE: `status`, `sources`, `delta`, `done`, and `error`. Requires `Authorization: Bearer <token>`. |
 | `POST /ingest/{ticker}` | Resolves a ticker and queues a download job. Every request publishes a job so a ticker can be loaded for different forms or years. Query parameters: `form_type`, `report_year`, `filing_year`. Requires `Authorization: Bearer <token>`. |
 | `GET /ingest/status` | Reports expected and indexed chunks per filing along with per-document index state. Filters: `ticker`, `form_type`, `report_year`, `document_id`. Requires `Authorization: Bearer <token>`. |
+| `GET /filings` | Lists tracked filings with ticker, company, form, report and filing dates, accession number, CIK, SEC URL, chunk count, and index status. Filters: `ticker`, `form_type`, `report_year`. Requires `Authorization: Bearer <token>`. |
 | `GET /sec/filing` | Resolves, downloads, extracts, and dumps one filing synchronously. Useful for inspection, not for indexing. |
 | `GET /health` | Reports which `.env` keys loaded and whether each has a value. No secret previews. Treat it as an internal diagnostic. |
 
@@ -437,7 +439,7 @@ The ticker cache is fail-open. The chunk worker's Redis dependency is not; it ne
     └── src/
         ├── app/page.tsx        auth gate, chat shell, and streaming request lifecycle
         ├── app/dashboard/      ingestion status dashboard
-        ├── components/         auth screen, sidebar, chat view, message list, source cards, composer, ingest dialog, brand mark
+        ├── components/         auth screen, sidebar, chat view, message list, source cards, composer, ingest and filings dialogs, brand mark
         └── lib/                API client (JSON + SSE), auth hook, types, chat store, backend status
 ```
 
@@ -449,7 +451,7 @@ Backend tests run from the repository root:
 backend\.venv\Scripts\python.exe -m pytest
 ```
 
-`pytest.ini` points at `backend/tests`. The suite covers sentence splitting, structure records, SEC downloads and document extraction, ticker and filing resolution, the loader, the Qdrant pipeline, cache behavior, terminal output, retrieval source links, ingest-status reporting, SSE query streaming, Mem0 memory scoping, and both evaluation scripts.
+`pytest.ini` points at `backend/tests`. The suite covers sentence splitting, structure records, SEC downloads and document extraction, ticker and filing resolution, the loader, the Qdrant pipeline, cache behavior, terminal output, retrieval source links, ingest-status and filing-catalog reporting, SSE query streaming, Mem0 memory scoping, and both evaluation scripts.
 
 Frontend checks:
 
@@ -469,7 +471,7 @@ npm run build
 - Mem0 memory is external state. It is user-scoped and fail-open: a search or write failure is logged and the query continues. Blocked prompts are not saved. There is no admin endpoint for deleting a user's memories; use the Mem0 API. `MEMORY_ENABLED=false` disables both search and writes.
 - Redis is optional for ticker resolution and required for the worker's chunk staging. Postgres, Kafka, Redis, Qdrant, Mem0, and the model endpoints are all external dependencies; the compose file provides the first three.
 - The compose broker auto-creates topics. Run `scripts/kafka_migrate.py` when you need explicit partitions, retention, or replication; it never lowers partition counts or rewrites existing topic config.
-- `/query`, `/query/stream`, `/ingest/{ticker}`, and `/ingest/status` require a bearer token; `/`, `/health`, and `/sec/filing` stay public. Rate limiting is still absent. Add it before exposing the API outside a trusted network. `.env` values stay server-side; the browser only talks to the Next rewrite.
+- `/query`, `/query/stream`, `/ingest/{ticker}`, `/ingest/status`, and `/filings` require a bearer token; `/`, `/health`, and `/sec/filing` stay public. Rate limiting is still absent. Add it before exposing the API outside a trusted network. `.env` values stay server-side; the browser only talks to the Next rewrite.
 - `dump/` holds raw SEC filings and is ignored by git. Delete entries to reclaim disk space; reprocessing requires the file or a fresh download.
 
 ## Security

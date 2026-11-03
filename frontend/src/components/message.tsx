@@ -20,7 +20,7 @@ function RouteBadge({ route }: { route: NonNullable<ChatMessage["route"]> }) {
   return (
     <span
       title={meta.description}
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 font-mono text-[9.5px] uppercase tracking-[0.14em] ${meta.tone}`}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 font-text text-[9.5px] uppercase tracking-[0.14em] ${meta.tone}`}
     >
       <span className="h-1 w-1 rounded-full bg-current" />
       {meta.label}
@@ -30,7 +30,7 @@ function RouteBadge({ route }: { route: NonNullable<ChatMessage["route"]> }) {
 
 function Timestamp({ value }: { value: number }) {
   return (
-    <span className="font-mono text-[9.5px] text-muted-soft">
+    <span className="font-text text-[9.5px] text-muted-soft">
       {new Date(value).toLocaleTimeString([], {
         hour: "2-digit",
         minute: "2-digit",
@@ -64,9 +64,9 @@ function PendingAnswer({ stage }: { stage?: string }) {
           "Planning, retrieving, and reading filing context"}
       </div>
       <div className="space-y-2.5">
-        <div className="h-2.5 w-[82%] animate-pulse rounded-full bg-surface-elevated" />
-        <div className="h-2.5 w-[64%] animate-pulse rounded-full bg-surface-elevated/80 [animation-delay:150ms]" />
-        <div className="h-2.5 w-[41%] animate-pulse rounded-full bg-surface-elevated/60 [animation-delay:300ms]" />
+        <div className="h-2.5 w-[82%] animate-pulse rounded-full bg-cream-deeper" />
+        <div className="h-2.5 w-[64%] animate-pulse rounded-full bg-cream-deeper/80 [animation-delay:150ms]" />
+        <div className="h-2.5 w-[41%] animate-pulse rounded-full bg-cream-deeper/60 [animation-delay:300ms]" />
       </div>
     </div>
   );
@@ -90,7 +90,7 @@ export function Message({
     return (
       <div className="flex justify-end">
         <div className="max-w-[88%] sm:max-w-[78%]">
-          <div className="whitespace-pre-wrap rounded-xl rounded-br-sm border border-lemon/15 bg-lemon/[0.06] px-4 py-3 text-[14.5px] leading-7 text-ink shadow-card">
+          <div className="whitespace-pre-wrap rounded-xl rounded-br-sm border border-beige bg-surface-cream px-4 py-3 text-chat text-ink shadow-card">
             {message.content}
           </div>
           <div className="mt-1.5 flex justify-end pr-1">
@@ -140,12 +140,12 @@ export function Message({
               <button
                 type="button"
                 onClick={copyAnswer}
-                className="rounded-md p-1 text-muted-soft opacity-0 transition hover:bg-surface-soft hover:text-lemon focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lemon/30 group-hover/message:opacity-100 max-sm:opacity-100"
+                className="rounded-md p-1 text-muted-soft opacity-0 transition hover:bg-surface-soft hover:text-lemon-deep focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lemon/30 group-hover/message:opacity-100 max-sm:opacity-100"
                 aria-label="Copy answer"
                 title="Copy answer"
               >
                 {copied ? (
-                  <CheckIcon className="h-3.5 w-3.5 text-lemon" />
+                  <CheckIcon className="h-3.5 w-3.5 text-lemon-deep" />
                 ) : (
                   <CopyIcon className="h-3.5 w-3.5" />
                 )}
@@ -160,7 +160,7 @@ export function Message({
             <div className="max-w-[68ch]">
               <Markdown>{message.content}</Markdown>
               <span
-                className="mt-1 inline-block h-3.5 w-[7px] animate-pulse rounded-[1px] bg-lemon/80"
+                className="mt-1 inline-block h-5 w-[7px] animate-pulse rounded-[1px] bg-lemon/80"
                 aria-hidden="true"
               />
             </div>
@@ -172,10 +172,10 @@ export function Message({
             <div className="flex items-start gap-2.5">
               <AlertIcon className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
               <div className="min-w-0">
-                <p className="text-[13px] font-medium text-danger">
+                <p className="text-[15px] font-semibold text-danger">
                   Request failed
                 </p>
-                <p className="mt-1 text-[12.5px] leading-6 text-muted">
+                <p className="mt-1 text-[14.5px] leading-6 text-muted">
                   {message.error ||
                     "The retrieval backend did not return a response."}
                 </p>
@@ -183,7 +183,7 @@ export function Message({
                   <button
                     type="button"
                     onClick={() => onRetry(retryPrompt)}
-                    className="mt-2.5 rounded-lg border border-hairline bg-surface-soft px-2.5 py-1 text-[11.5px] font-medium text-body transition hover:border-lemon/30 hover:text-ink"
+                    className="mt-2.5 rounded-lg border border-hairline-strong bg-canvas px-2.5 py-1 text-[12.5px] font-medium text-body transition hover:border-lemon/40 hover:text-ink"
                   >
                     Try again
                   </button>
@@ -196,7 +196,7 @@ export function Message({
             {message.content ? (
               <Markdown>{message.content}</Markdown>
             ) : (
-              <p className="text-[14px] leading-7 text-muted">
+              <p className="text-chat text-muted">
                 {isBlocked
                   ? "This request was stopped by the input guardrail."
                   : "The assistant returned an empty answer."}
@@ -214,13 +214,13 @@ export function Message({
               aria-controls={`sources-${message.id}`}
               className={`inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lemon/30 ${
                 sourcesOpen
-                  ? "border-lemon/30 bg-lemon/[0.06] text-ink"
-                  : "border-hairline bg-surface-card/60 text-muted hover:border-lemon/30 hover:text-ink"
+                  ? "border-lemon/40 bg-surface-cream text-ink"
+                  : "border-hairline-strong bg-canvas text-muted hover:border-lemon/40 hover:text-ink"
               }`}
             >
-              <LayersIcon className="h-3.5 w-3.5 text-lemon" />
+              <LayersIcon className="h-3.5 w-3.5 text-lemon-deep" />
               Sources
-              <span className="rounded-full border border-hairline bg-surface-soft px-1.5 font-mono text-[9px] leading-4 text-muted-soft">
+              <span className="rounded-full border border-beige bg-surface-cream px-1.5 font-text text-[9px] leading-4 text-muted">
                 {sources.length}
               </span>
               <ChevronRightIcon
@@ -233,7 +233,7 @@ export function Message({
             {sourcesOpen ? (
               <div
                 id={`sources-${message.id}`}
-                className="mt-2 max-w-xl overflow-hidden rounded-xl border border-hairline bg-surface p-1 shadow-lift"
+                className="mt-2 max-w-xl overflow-hidden rounded-xl border border-hairline bg-surface p-1 shadow-float"
               >
                 <div className="max-h-72 overflow-y-auto">
                   {sources.map((source) => (

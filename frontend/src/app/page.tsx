@@ -6,7 +6,14 @@ import { useCallback, useEffect, useState } from "react";
 import { AuthLoading, AuthScreen } from "@/components/auth-screen";
 import { ChatView } from "@/components/chat-view";
 import { Composer } from "@/components/composer";
-import { DatabaseIcon, GitHubIcon, LayersIcon, MenuIcon } from "@/components/icons";
+import {
+  DatabaseIcon,
+  FilesIcon,
+  GitHubIcon,
+  LayersIcon,
+  MenuIcon,
+} from "@/components/icons";
+import { FilingsDialog } from "@/components/filings-dialog";
 import { IngestDialog } from "@/components/ingest-dialog";
 import { Sidebar } from "@/components/sidebar";
 import { SourceSheet } from "@/components/source-card";
@@ -29,6 +36,7 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [ingestOpen, setIngestOpen] = useState(false);
+  const [filingsOpen, setFilingsOpen] = useState(false);
   const [sourceSheet, setSourceSheet] = useState<Source | null>(null);
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
 
@@ -200,6 +208,7 @@ export default function Home() {
           setSourceSheet(null);
         }}
         onIndex={() => setIngestOpen(true)}
+        onFilings={() => setFilingsOpen(true)}
         onRecheck={recheck}
         onLogout={() => {
           store.clearAll();
@@ -207,7 +216,7 @@ export default function Home() {
         }}
       />
 
-      <main className="relative flex min-w-0 flex-1 flex-col bg-canvas bg-[radial-gradient(120%_75%_at_50%_-20%,rgba(215,255,62,0.045),transparent_55%)]">
+      <main className="relative flex min-w-0 flex-1 flex-col bg-canvas bg-[radial-gradient(120%_75%_at_50%_-20%,rgba(250,82,15,0.06),transparent_55%)]">
         <header className="z-20 flex h-16 shrink-0 items-center gap-3 border-b border-hairline bg-canvas/80 px-4 backdrop-blur-xl sm:px-6">
           <button
             type="button"
@@ -219,14 +228,14 @@ export default function Home() {
           </button>
 
           <div className="min-w-0">
-            <p className="flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.2em] text-muted-soft">
+            <p className="flex items-center gap-1.5 font-text text-[9px] uppercase tracking-[0.2em] text-muted-soft">
               Filing Room
               <span className="text-hairline">/</span>
-              <span className={lastRoute ? "text-lemon/80" : ""}>
+              <span className={lastRoute ? "text-lemon-deep" : ""}>
                 {ROUTE_LABEL[lastRoute ?? ""] ?? "inquiry"}
               </span>
             </p>
-            <h1 className="max-w-[46vw] truncate font-serif text-[17px] leading-tight text-ink sm:max-w-md">
+            <h1 className="max-w-[46vw] truncate font-text text-[17px] font-semibold leading-tight text-ink sm:max-w-md">
               {active?.title ?? "New inquiry"}
             </h1>
           </div>
@@ -247,7 +256,7 @@ export default function Home() {
                   }`}
                 />
               </span>
-              <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted">
+              <span className="font-text text-[9px] uppercase tracking-[0.14em] text-muted">
                 {backendStatus === "online"
                   ? "API online"
                   : backendStatus === "offline"
@@ -257,15 +266,23 @@ export default function Home() {
             </div>
             <Link
               href="/dashboard"
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-hairline bg-surface-soft px-3 text-[11.5px] font-medium text-muted transition hover:border-lemon/30 hover:text-ink"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-hairline-strong bg-canvas px-3 text-[11.5px] font-medium text-muted transition hover:border-lemon/40 hover:text-ink"
             >
               <LayersIcon className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Pipeline</span>
             </Link>
             <button
               type="button"
+              onClick={() => setFilingsOpen(true)}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-hairline-strong bg-canvas px-3 text-[11.5px] font-medium text-muted transition hover:border-lemon/40 hover:text-ink"
+            >
+              <FilesIcon className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Filings</span>
+            </button>
+            <button
+              type="button"
               onClick={() => setIngestOpen(true)}
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-hairline bg-surface-soft px-3 text-[11.5px] font-medium text-muted transition hover:border-lemon/30 hover:text-ink"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-lemon px-3 text-[11.5px] font-medium text-on-lemon transition hover:bg-lemon-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lemon/40"
             >
               <DatabaseIcon className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Index filing</span>
@@ -276,7 +293,7 @@ export default function Home() {
               rel="noopener noreferrer"
               aria-label="View source on GitHub"
               title="View source on GitHub"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-hairline bg-surface-soft text-muted transition hover:border-lemon/30 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lemon/40"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-hairline-strong bg-canvas text-muted transition hover:border-lemon/40 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lemon/40"
             >
               <GitHubIcon className="h-4 w-4" />
             </a>
@@ -305,6 +322,10 @@ export default function Home() {
         onClose={() => setIngestOpen(false)}
         onQueued={recheck}
       />
+
+      {filingsOpen ? (
+        <FilingsDialog onClose={() => setFilingsOpen(false)} />
+      ) : null}
 
       {sourceSheet ? (
         <SourceSheet

@@ -30,3 +30,6 @@ frontend/*.tsbuildinfo
 *.log
 .DS_Store
 Thumbs.db
+
+# Installer artifacts
+*.msi

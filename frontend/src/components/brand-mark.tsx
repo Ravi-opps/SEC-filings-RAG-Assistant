@@ -18,7 +18,7 @@ export function BrandMark({
   return (
     <div
       aria-hidden="true"
-      className={`flex shrink-0 items-center justify-center rounded-full border border-hairline bg-surface-soft text-lemon ${sizing.box} ${className}`}
+      className={`flex shrink-0 items-center justify-center rounded-lg bg-lemon text-on-lemon ${sizing.box} ${className}`}
     >
       <FilingMark className={sizing.mark} />
     </div>

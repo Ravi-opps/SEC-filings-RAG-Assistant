@@ -7,7 +7,7 @@ export const ROUTE_META: Record<
   retrieval: {
     label: "Grounded",
     description: "Answered from indexed filing passages",
-    tone: "border-lemon/25 bg-lemon/10 text-lemon",
+    tone: "border-lemon/30 bg-lemon/10 text-lemon-deep",
   },
   conversational: {
     label: "Direct",
