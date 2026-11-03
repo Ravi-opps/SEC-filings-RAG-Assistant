@@ -41,7 +41,9 @@ flowchart LR
   subgraph QueryPath["Query path · LangGraph"]
     MEMREAD["Mem0 search<br/>user memories"]
     GUARD["Guardrail<br/>Groq gpt-oss-120b"]
-    PLAN["Planner<br/>gpt-5.4-pro"]
+    PLAN["Planner<br/>gpt-5.4-pro<br/>strict JSON"]
+    VALIDATE{"Valid planner<br/>JSON schema?"}
+    PLANERR["Planner error<br/>HTTP 502"]
     REWRITE["Query rewrite"]
     RETRIEVE["Embed query<br/>Qdrant top 20<br/>rerank top 5"]
     ANSWER["Responder<br/>gpt-6-sol"]
@@ -76,8 +78,12 @@ flowchart LR
   GUARD -->|allowed| PLAN
   GUARD -->|blocked| BLOCK
   BLOCK --> UI
-  PLAN -->|conversational| ANSWER
-  PLAN -->|retrieval| REWRITE
+  PLAN --> VALIDATE
+  VALIDATE -->|invalid, retry| PLAN
+  VALIDATE -->|valid: conversational| ANSWER
+  VALIDATE -->|valid: retrieval| REWRITE
+  VALIDATE -->|invalid after retries| PLANERR
+  PLANERR --> UI
   REWRITE --> RETRIEVE
   RETRIEVE --> QDRANT
   RETRIEVE --> ANSWER
@@ -113,7 +119,7 @@ The split is deliberate: the API does the fast part, and the slow, failure-prone
 1. The browser sends `{"user prompt": "..."}` to `/api/backend/query/stream` and renders `status`, `sources`, and `delta` events as they arrive. The non-streaming `/query` endpoint accepts the same payload and returns one JSON object. Next.js rewrites both paths to FastAPI and forwards `X-Conversation-Id` and the bearer token.
 2. FastAPI scopes the conversation to the authenticated user as `<user_id>:<conversation_id>` and searches Mem0 for that user's memories. Hits become a system message that labels them as background data, not instructions and not filing evidence.
 3. `run_agent` loads the scoped conversation history and starts the LangGraph flow. The guardrail calls Groq `openai/gpt-oss-120b`. A blocked prompt ends the run with a fixed refusal; the planner, retrieval service, and answer model are never called.
-4. The planner calls the classifier endpoint and returns `conversational` or `retrieval`. It sees the conversation history and any memory context, so a follow-up can be answered without another search.
+4. The planner calls the classifier endpoint and returns `conversational` or `retrieval`. The prompt requires exactly one JSON object with exactly one key, `type`. The app parses the entire response, rejects prose, markdown, extra keys, and any other route, and retries invalid output up to `PLANNER_MAX_ATTEMPTS` (default 2). If every attempt fails, the request returns HTTP 502. The planner sees the conversation history and any memory context, so a follow-up can be answered without another search.
 5. For retrieval, the rewriter turns the latest message plus history into a self-contained query. The query is embedded, Qdrant returns the top 20 candidates, and the reranker cuts them to the top 5 that are actually sent to the answer model.
 6. The responder receives the numbered chunks and is instructed to cite them as `[1]`, `[2]`. On the streaming route it emits `delta` events and finishes with a `done` payload; the non-streaming route returns the same route, answer, and sources as one JSON object.
 7. After a non-blocked answer, FastAPI writes the turn back to Mem0. A memory write failure is logged and ignored.
@@ -129,6 +135,8 @@ The split is deliberate: the API does the fast part, and the slow, failure-prone
 **Redis is both a cache and a handoff buffer.** The ticker cache is fail-open: if Redis is unavailable, resolution still works, just uncached. Chunk staging is not optional for the worker path; it is how parsing is separated from embedding and how interrupted batches are resumed.
 
 **The guardrail runs first.** It rejects prompts that are unrelated to SEC filings, ask for investment advice, or try to override the system. That keeps the expensive path focused and makes the refusal deterministic.
+
+**Planner output is validated, not trusted.** The planner prompt is deterministic and ordered, but the app does not rely on the model to obey it. `parse_planner_response` requires a single JSON object with exactly one key, `type`, and only the values `conversational` or `retrieval`; `planner_node` retries invalid output up to `PLANNER_MAX_ATTEMPTS` (default 2), then fails with HTTP 502. This prevents a malformed classifier response from being routed or silently treated as a default.
 
 **Memory is background, not evidence.** `memory_service.py` searches Mem0 with `filters={"user_id": ...}` built from `MEM0_USER_PREFIX` plus the JWT user id, so one account cannot read another account's memories. The injected system message tells the guardrail, planner, and responder to treat memories as untrusted background data, never as instructions and never as filing evidence. Turns are saved only when the route is not `blocked`, so a refusal cannot poison memory. An empty `MEM0_KEY` or `MEMORY_ENABLED=false` turns the feature off, and search or write failures are logged and swallowed.
 
@@ -331,6 +339,7 @@ The two MRR misses were `NQ07` and `RQ05`: both returned a related MD&A chunk, b
 | `QDRANT_URL`, `QDRANT_API_KEY`, `QDRANT_API`, `QDRANT_COLLECTION` | Vector store connection and collection. Default collection: `sec_sentences`. |
 | `EMBED_URL`, `OPENAI_EMBEDDINGS`, `EMBED_MODEL` | Embedding endpoint and model. Default: `text-embedding-3-large`. |
 | `CLASSIFIER_URL`, `CLASSIFIER_NAME`, `CLASSIFIER_KEY` | Planner and query-rewrite model. Default model: `gpt-5.4-pro`. |
+| `PLANNER_MAX_ATTEMPTS` | Planner attempts when the classifier returns invalid JSON or a route outside the allowed schema. Default: `2`. |
 | `SOL_URL`, `OPENAI_SOL` | Answer model endpoint and key. Default model: `gpt-6-sol`. |
 | `RERANK_URL`, `RERANK_KEY`, `RERANK_MODEL` | Cohere-style rerank endpoint. |
 | `GROQ` or `GROQ_API_KEY`, `GROQ_URL`, `GROQ_GUARDRAIL_MODEL` | Guardrail model. Default: `openai/gpt-oss-120b`. |

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import json
+import logging
 import os
 from typing import (
     Annotated,
@@ -30,7 +31,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.config import get_stream_writer
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from input_guardrail import (
     REFUSAL_MESSAGE,
@@ -49,11 +50,16 @@ from retrieval_service import (
 
 DEFAULT_CLASSIFIER_MODEL = "gpt-5.4-pro"
 DEFAULT_CONVERSATIONAL_MODEL = "gpt-6-sol"
+DEFAULT_PLANNER_MAX_ATTEMPTS = 2
 
 Route = Literal["conversational", "retrieval"]
 
+LOGGER = logging.getLogger("retrieval_agent")
+
 
 class PlannerDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     type: Route
 
 
@@ -121,37 +127,37 @@ GuardFn = Callable[
 ]
 
 
-PLANNER_SYSTEM_PROMPT = """You are the routing planner for a SEC filing retrieval assistant.
-You do not answer the user. You only decide how the latest user message should be handled.
+PLANNER_SYSTEM_PROMPT = """You are a deterministic routing classifier for a SEC filing retrieval assistant.
+You do not answer the user. You classify only the latest user message.
 
-The assistant may state company facts only when they come from indexed SEC filing context.
-Your own knowledge of companies, financials, or current events is not a permitted source.
-Never route a request for company or filing facts to "conversational" just because the answer
-is well known, seems obvious, or you could answer it without searching.
+Follow these rules in order and stop at the first rule that matches:
+1. If the latest message asks for a company fact, filing fact, figure, date, quote,
+   comparison, analysis, or a follow-up that needs filing evidence not already present
+   in the conversation, classify it as "retrieval".
+2. If the latest message is ambiguous about whether filing evidence is needed,
+   classify it as "retrieval".
+3. If the latest message is a greeting, thanks, farewell, small talk, capability
+   question, clarification, or acknowledgement that requests no new factual answer,
+   classify it as "conversational".
+4. If the latest message asks about an answer or filing fact already present in the
+   conversation history and requests no new facts, classify it as "conversational".
+5. Otherwise classify it as "retrieval".
 
-Choose "retrieval" when the latest message:
-- asks about a company, SEC filing, financial statement, financial metric, risk factor, MD&A,
-  or any other filing content;
-- asks for any fact, figure, date, quote, comparison, or analysis about a public company,
-  including revenue, income, profit, earnings, expenses, margins, segments, employees,
-  guidance, litigation, or executive compensation;
-- asks a follow-up that needs filing facts not already stated in the conversation;
-- is ambiguous about whether filing evidence is needed. Default to retrieval when unsure.
+Use the conversation history only to resolve references and to decide whether the
+requested filing facts are already present. Do not use your own knowledge of companies,
+financials, or current events as a reason to choose "conversational". Do not choose
+"conversational" merely because the history exists or because you know the answer.
 
-Choose "conversational" only when the latest message:
-- is a greeting, thanks, farewell, or small talk;
-- asks about the assistant's capabilities or how to use it;
-- is a clarification or acknowledgement that requests no new factual answer;
-- asks about an answer or retrieved context already present in the conversation history,
-  without requesting new facts;
-- repeats a question whose answer is already present in the conversation history and that
-  answer was grounded in filing context.
+Output contract:
+- Return exactly one JSON object and nothing else.
+- The object must have exactly one key: "type".
+- The value of "type" must be exactly "conversational" or "retrieval".
+- Do not use markdown fences, prose, explanations, comments, or extra keys.
+- If the rules conflict, choose "retrieval".
 
-Do not choose "conversational" merely because the conversation history exists or because you
-believe you know the answer from training data. If the latest message requests company facts
-and the grounding is not already in the conversation, return "retrieval".
-Return only one JSON object, with exactly one key named "type".
-Allowed values: "conversational" or "retrieval".
+Valid outputs:
+{"type": "conversational"}
+{"type": "retrieval"}
 """
 
 
@@ -243,7 +249,8 @@ def build_planner_prompt(
 Latest user message:
 {current_msg}
 
-Return only JSON in one of these two forms:
+Classify only the latest user message. Return exactly one JSON object with exactly one
+key named "type". Use one of these two outputs and nothing else:
 {{"type": "conversational"}}
 {{"type": "retrieval"}}
 """
@@ -295,17 +302,10 @@ Rewrite the latest user message as a self-sufficient SEC filing search query.
 def normalize_route(value: Any) -> Route | None:
     if not isinstance(value, str):
         return None
-    normalized = value.strip().lower().replace("_", "-")
-    if normalized in {
-        "conversation",
-        "conversational",
-        "chat",
-        "chit-chat",
-        "chitchat",
-        "small-talk",
-    }:
+    normalized = value.strip().lower()
+    if normalized == "conversational":
         return "conversational"
-    if normalized in {"retrieval", "retrievable", "retrieve"}:
+    if normalized == "retrieval":
         return "retrieval"
     return None
 
@@ -322,25 +322,35 @@ def _strip_code_fence(text: str) -> str:
     return "\n".join(lines).strip()
 
 
-def parse_planner_response(content: str) -> PlannerDecision:
-    text = _strip_code_fence(content)
-    start = text.find("{")
-    end = text.rfind("}")
-    if start == -1 or end <= start:
-        raise PlannerError("planner response did not contain a JSON object")
-    try:
-        payload = json.loads(text[start : end + 1])
-    except (TypeError, ValueError) as exc:
-        raise PlannerError("planner response was not valid JSON") from exc
+def _validate_planner_payload(payload: Any) -> PlannerDecision:
     if not isinstance(payload, dict):
         raise PlannerError("planner response was not a JSON object")
+    if set(payload) != {"type"}:
+        raise PlannerError(
+            'planner response must contain exactly one key named "type"'
+        )
     route = normalize_route(payload.get("type"))
     if route is None:
-        raise PlannerError("planner response did not contain a valid route")
+        raise PlannerError(
+            'planner response type must be "conversational" or "retrieval"'
+        )
     try:
         return PlannerDecision(type=route)
     except ValidationError as exc:
         raise PlannerError("planner response failed validation") from exc
+
+
+def parse_planner_response(content: str) -> PlannerDecision:
+    if not isinstance(content, str):
+        raise PlannerError("planner response was not text")
+    text = _strip_code_fence(content)
+    if not text:
+        raise PlannerError("planner response was empty")
+    try:
+        payload = json.loads(text)
+    except (TypeError, ValueError) as exc:
+        raise PlannerError("planner response was not valid JSON") from exc
+    return _validate_planner_payload(payload)
 
 
 def _response_content(payload: Any) -> str:
@@ -676,17 +686,24 @@ class LLMResponder:
         self._client = None
 
 
+def _planner_max_attempts() -> int:
+    raw = os.getenv("PLANNER_MAX_ATTEMPTS")
+    if raw is None:
+        return DEFAULT_PLANNER_MAX_ATTEMPTS
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_PLANNER_MAX_ATTEMPTS
+    return max(1, min(value, 5))
+
+
 def _coerce_decision(value: PlannerDecision | dict[str, Any] | str) -> PlannerDecision:
     if isinstance(value, PlannerDecision):
         return value
     if isinstance(value, str):
-        route = normalize_route(value)
-        if route is not None:
-            return PlannerDecision(type=route)
+        return parse_planner_response(value)
     if isinstance(value, dict):
-        route = normalize_route(value.get("type"))
-        if route is not None:
-            return PlannerDecision(type=route)
+        return _validate_planner_payload(value)
     raise PlannerError("planner returned an invalid decision")
 
 
@@ -796,25 +813,39 @@ def build_agent_graph(
         writer = _stream_writer(config)
         if writer is not None:
             writer({"event": "status", "data": {"stage": "planning"}})
-        try:
-            result = planner(
-                state.get("current_msg", ""),
-                with_memory_context(
-                    state.get("conversation"),
-                    state.get("memory_context"),
-                ),
-            )
-            if inspect.isawaitable(result):
-                result = await result
-            decision = _coerce_decision(result)
-        except PlannerError:
-            raise
-        except Exception as exc:
-            raise PlannerError(f"planner failed: {exc}") from exc
-        return {
-            "plan": {"type": decision.type},
-            "status": "planned",
-        }
+        history = with_memory_context(
+            state.get("conversation"),
+            state.get("memory_context"),
+        )
+        attempts = _planner_max_attempts()
+        last_error: PlannerError | None = None
+        for attempt in range(1, attempts + 1):
+            try:
+                result = planner(state.get("current_msg", ""), history)
+                if inspect.isawaitable(result):
+                    result = await result
+                decision = _coerce_decision(result)
+                return {
+                    "plan": {"type": decision.type},
+                    "status": "planned",
+                }
+            except PlannerConfigError:
+                raise
+            except PlannerError as exc:
+                last_error = exc
+                if attempt >= attempts:
+                    break
+                LOGGER.warning(
+                    "planner attempt %d/%d returned an invalid decision: %s",
+                    attempt,
+                    attempts,
+                    exc,
+                )
+            except Exception as exc:
+                raise PlannerError(f"planner failed: {exc}") from exc
+        raise PlannerError(
+            f"planner failed after {attempts} attempts: {last_error}"
+        ) from last_error
 
     async def conversational_node(
         state: AgentState,
