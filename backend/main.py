@@ -240,18 +240,12 @@ def root():
 def health():
     values = reload_env()
 
-    if not ENV_PATH.exists():
-        return JSONResponse(
-            status_code=500,
-            content={"all_loaded": False, "error": f"{ENV_PATH} not found"},
-        )
-
     envs = {
         key: {
             "loaded": key in os.environ,
-            "has_value": bool(value),
+            "has_value": bool(os.getenv(key)),
         }
-        for key, value in values.items()
+        for key in values
     }
 
     return {
@@ -260,6 +254,7 @@ def health():
         "keys_with_values": sum(1 for item in envs.values() if item["has_value"]),
         "total_keys": len(envs),
         "env_file": str(ENV_PATH),
+        "env_file_present": ENV_PATH.exists(),
         "envs": envs,
     }
 
@@ -336,8 +331,8 @@ def ingest_status(
     _user: CurrentUser = Depends(get_current_user),
 ):
     """Report how many chunks of each filing are loaded into Qdrant."""
-    values = reload_env()
-    if not values.get("QDRANT_URL"):
+    reload_env()
+    if not (os.getenv("QDRANT_URL") or "").strip():
         raise HTTPException(
             status_code=503,
             detail="QDRANT_URL is not configured.",
