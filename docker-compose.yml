@@ -82,7 +82,7 @@ services:
   backend:
     <<: *backend-base
     ports:
-      - "${BACKEND_PORT:-8001}:8000"
+      - "${BACKEND_PORT:-80}:8000"
     volumes:
       - backend-dump:/app/dump
     healthcheck:
